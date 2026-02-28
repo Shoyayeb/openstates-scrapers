@@ -9,7 +9,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects import mysql
 from sqlalchemy.sql import and_
-from sqlalchemy.orm import backref, relation, foreign
+from sqlalchemy.orm import backref, relationship, foreign
 from sqlalchemy.ext.declarative import declarative_base
 
 from lxml import etree
@@ -39,24 +39,24 @@ class CABill(Base):
     current_house = Column(String(60))
     current_status = Column(String(60))
 
-    actions = relation(
+    actions = relationship(
         "CABillAction", backref=backref("bill"), order_by="CABillAction.bill_history_id"
     )
 
-    versions = relation(
+    versions = relationship(
         "CABillVersion",
         backref=backref("bill"),
         order_by="desc(CABillVersion.version_num)",
     )
 
-    votes = relation(
+    votes = relationship(
         "CAVoteSummary",
         backref=backref("bill"),
         order_by="CAVoteSummary.vote_date_time",
         overlaps="bill,detail_votes",
     )
 
-    analyses = relation(
+    analyses = relationship(
         "CABillAnalysis",
         backref=backref("bill"),
         order_by="CABillAnalysis.analysis_date",
@@ -127,7 +127,7 @@ class CABillVersionAuthor(Base):
     trans_update = Column(DateTime, primary_key=True)
     primary_author_flg = Column(String(1))
 
-    version = relation(CABillVersion, backref=backref("authors"))
+    version = relationship(CABillVersion, backref=backref("authors"))
 
 
 class CABillAnalysis(Base):
@@ -247,8 +247,8 @@ class CAVoteSummary(Base):
     trans_uid = Column(String(30))
     trans_update = Column(DateTime, primary_key=True)
 
-    motion = relation(CAMotion, overlaps="bill,detail_votes")
-    location = relation(CALocation, overlaps="bill,detail_votes")
+    motion = relationship(CAMotion, overlaps="bill,detail_votes")
+    location = relationship(CALocation, overlaps="bill,detail_votes")
 
     @property
     def threshold(self):
@@ -289,12 +289,12 @@ class CAVoteDetail(Base):
     trans_uid = Column(String(30), primary_key=True)
     trans_update = Column(DateTime, primary_key=True)
 
-    bill = relation(
+    bill = relationship(
         CABill,
         primaryjoin="CABill.bill_id == foreign(CAVoteDetail.bill_id)",
         backref=backref("detail_votes"),
     )
-    summary = relation(
+    summary = relationship(
         CAVoteSummary,
         primaryjoin=and_(
             CAVoteSummary.bill_id == foreign(bill_id),
@@ -324,4 +324,4 @@ class CACommitteeHearing(Base):
     trans_uid = Column(String(30), primary_key=True)
     trans_update_date = Column(DateTime, primary_key=True)
 
-    bill = relation(CABill, backref=backref("committee_hearings"))
+    bill = relationship(CABill, backref=backref("committee_hearings"))
