@@ -301,8 +301,9 @@ class KYBillScraper(Scraper, LXMLMixin):
         voters = defaultdict(list)
         for x in range(len(pdflines)):
             line = pdflines[x]
-            if re.search(r"(\d+/\d+/\d+)", line):
-                initial_date = line.strip()
+            date_match = re.search(r"(\d+/\d+/\d+)", line)
+            if date_match:
+                initial_date = date_match.group(1)
             if ("AM" in line) or ("PM" in line):
                 split_l = line.split()
                 for y in split_l:
@@ -320,15 +321,30 @@ class KYBillScraper(Scraper, LXMLMixin):
                         if len(motion) < 1:
                             motion = "No Motion Provided"
             if "YEAS:" in line:
-                yeas = int(line.split()[-1])
+                try:
+                    yeas = int(line.split()[-1])
+                except ValueError:
+                    yeas = 0
             if "NAYS:" in line:
-                nays = int(line.split()[-1])
+                try:
+                    nays = int(line.split()[-1])
+                except ValueError:
+                    nays = 0
             if "ABSTAINED:" in line:
-                abstained = int(line.split()[-1])
+                try:
+                    abstained = int(line.split()[-1])
+                except ValueError:
+                    abstained = 0
             if "PASSES:" in line:
-                abstained = int(line.split()[-1])
+                try:
+                    abstained = int(line.split()[-1])
+                except ValueError:
+                    abstained = 0
             if "NOT VOTING:" in line:
-                not_voting = int(line.split()[-1])
+                try:
+                    not_voting = int(line.split()[-1])
+                except ValueError:
+                    not_voting = 0
 
             if "YEAS :" in line:
                 y = 0

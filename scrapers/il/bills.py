@@ -711,7 +711,7 @@ class IlBillScraper(Scraper):
         try:
             fname, resp = self.urlretrieve(href)
             pdflines = [
-                line.decode("utf-8") for line in convert_pdf(fname, "text").splitlines()
+                line.decode("utf-8", errors="replace") for line in convert_pdf(fname, "text").splitlines()
             ]
             os.remove(fname)
             return pdflines

@@ -1,7 +1,35 @@
-from utils import url_xpath
+import logging
+import time
+import requests
+import lxml.html
 from openstates.scrape import State
 from .bills import ARBillScraper
 from .events import AREventScraper
+
+logger = logging.getLogger(__name__)
+
+
+def _fetch_ar_page(url, retries=5, timeout=30):
+    """Fetch AR page with retry logic for flaky SSL."""
+    last_exc = None
+    for attempt in range(1, retries + 1):
+        try:
+            resp = requests.get(url, verify=False, timeout=timeout)
+            resp.raise_for_status()
+            return resp.text
+        except (
+            requests.exceptions.SSLError,
+            requests.exceptions.ConnectionError,
+            requests.exceptions.Timeout,
+        ) as e:
+            last_exc = e
+            wait = 5 * attempt
+            logger.warning(
+                "AR fetch attempt %d/%d failed (%s), retrying in %ds...",
+                attempt, retries, e, wait,
+            )
+            time.sleep(wait)
+    raise last_exc
 
 
 class Arkansas(State):
@@ -291,8 +319,8 @@ class Arkansas(State):
     ]
 
     def get_session_list(self):
-        links = url_xpath(
-            "https://www.arkleg.state.ar.us/Bills/Search", "//label[@class='session']"
-        )
+        html = _fetch_ar_page("https://www.arkleg.state.ar.us/Bills/Search")
+        doc = lxml.html.fromstring(html)
+        links = doc.xpath("//label[@class='session']")
         sessions = [a.text_content() for a in links]
         return sessions

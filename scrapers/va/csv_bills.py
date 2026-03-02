@@ -310,9 +310,13 @@ class VaCSVBillScraper(Scraper):
                 action = hist["history_description"]
                 action_date = hist["history_date"]
                 date = dateutil.parser.parse(action_date).date()
-                chamber = chamber_types[action[0]]
+                action_stripped = action.strip()
+                if not action_stripped or action_stripped[0] not in chamber_types:
+                    self.warning(f"Skipping action with unexpected prefix: {repr(action)}")
+                    continue
+                chamber = chamber_types[action_stripped[0]]
                 vote_id = hist["history_refid"]
-                cleaned_action = action[2:]
+                cleaned_action = action_stripped[2:]
 
                 if re.findall(r"\d{8}D", cleaned_action):
                     doc_actions[action_date].append(cleaned_action)

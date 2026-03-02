@@ -90,7 +90,7 @@ _categorizer_rules = (
         ["referral-committee", "reading-2"],
     ),
     Rule(["(?i)Placed on Third Reading"], ["reading-3"]),
-    Rule(["^(?i)Third Reading"], ["reading-3"]),
+    Rule(["(?i)^Third Reading"], ["reading-3"]),
     Rule(r"committee substitute (?P<committees>.+?);"),
     Rule(["Do Pass (as amended )?(?P<committees>.+)"], ["committee-passage"]),
     Rule(["Failed in Committee - (?P<committees>.+)"], ["committee-failure"]),
@@ -101,7 +101,7 @@ _categorizer_rules = (
         ["Reported Do Pass, amended by committee substitute (?P<committees>.+?);"],
         ["committee-passage"],
     ),
-    Rule(["^(?i)Reported Do Pass"], ["committee-passage"]),
+    Rule(["(?i)^Reported Do Pass"], ["committee-passage"]),
     Rule(
         ["Do pass, amended by committee substitute (?P<committees>)"],
         ["committee-passage"],

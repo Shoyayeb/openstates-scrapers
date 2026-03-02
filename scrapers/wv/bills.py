@@ -257,6 +257,9 @@ class WVBillScraper(Scraper):
         vote_type = None
         votes = collections.defaultdict(list)
         date = None
+        motion = "PASSAGE"
+        passed = False
+        yes_count = no_count = nv_count = exc_count = 0
 
         for idx, line in enumerate(lines):
             line = line.rstrip().decode("utf-8")

@@ -26,6 +26,12 @@ class ARBillScraper(Scraper):
     sponsors_chamber_cache = {}
 
     def scrape(self, chamber=None, session=None):
+        # Set reasonable timeouts to avoid hanging on slow gov sites
+        self.timeout = 60
+        self.retry_attempts = 3
+        self.retry_wait_seconds = 10
+        # AR state site has SSL issues — disable verification
+        self.verify = False
 
         self.slug = get_slug_for_session(session)
 

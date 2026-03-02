@@ -6,6 +6,17 @@ from utils import LXMLMixin
 from .actions import Categorizer
 
 
+class TimeoutSession(requests.Session):
+    """A requests.Session that applies a default timeout to all requests."""
+    def __init__(self, default_timeout=130):
+        super().__init__()
+        self.default_timeout = default_timeout
+
+    def request(self, method, url, **kwargs):
+        kwargs.setdefault("timeout", self.default_timeout)
+        return super().request(method, url, **kwargs)
+
+
 class DEBillScraper(Scraper, LXMLMixin):
     categorizer = Categorizer()
     chamber_codes = {"upper": 1, "lower": 2}
@@ -15,7 +26,7 @@ class DEBillScraper(Scraper, LXMLMixin):
     legislators_by_short = {}
     legislators_by_district = {}
 
-    session = requests.Session()
+    session = TimeoutSession(default_timeout=130)
 
     """
     DE has caucus-specific sites that it now

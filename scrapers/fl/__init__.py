@@ -6,8 +6,6 @@ from .events import FlEventScraper
 from utils import url_xpath
 from openstates.scrape import State
 
-logging.getLogger(__name__).addHandler(logging.NullHandler())
-
 
 class Florida(State):
     scrapers = {

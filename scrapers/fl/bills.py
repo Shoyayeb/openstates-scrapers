@@ -894,12 +894,9 @@ class FlBillScraper(Scraper):
             bill_list = BillList({"session": session})
             yield from self._process_bill_list(bill_list)
 
-        yield from retry_on_connection_error(
-            lambda: list(do_scrape_with_retry()),
-            max_retries=3,
-            initial_backoff=10,
-            max_backoff=120,
-        )
+        # Stream results instead of collecting all with list() to allow
+        # incremental output and avoid hanging on slow connections
+        yield from do_scrape_with_retry()
 
     def _create_fresh_session(self):
         """
