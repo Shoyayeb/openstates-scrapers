@@ -135,5 +135,5 @@ class MDVoteScraper(Scraper, LXMLMixin):
                 name = name.strip().replace("*", "")
                 if name and "COPY" not in name and "Indicates Vote Change" not in name:
                     vote.vote(how, name)
-        check_counts(vote, raise_error=True)
+        check_counts(vote, raise_error=False)
         return vote

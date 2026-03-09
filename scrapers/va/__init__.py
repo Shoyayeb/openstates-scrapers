@@ -1,4 +1,5 @@
 import logging
+import os
 from openstates.scrape import State
 from .csv_bills import VaCSVBillScraper
 from .events import VaEventScraper
@@ -12,11 +13,16 @@ logging.getLogger(__name__).addHandler(logging.NullHandler())
 settings = {"SCRAPELIB_RPM": 40}
 
 
+# Use the API-based scraper when VA_API_KEY is set; otherwise fall back
+# to the CSV scraper which works without an API key.
+_bills_scraper = VaBillScraper if os.getenv("VA_API_KEY") else VaCSVBillScraper
+
+
 class Virginia(State):
     scrapers = {
         "events": VaEventScraper,
         "csv_bills": VaCSVBillScraper,
-        "bills": VaBillScraper,
+        "bills": _bills_scraper,
     }
     legislative_sessions = [
         {

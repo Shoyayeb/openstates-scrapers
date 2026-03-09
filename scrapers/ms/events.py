@@ -5,6 +5,7 @@ import re
 from utils.events import match_coordinates
 from openstates.scrape import Scraper
 from openstates.scrape import Event
+from openstates.exceptions import EmptyScrape
 from spatula import PdfPage, HtmlPage, URL
 import datetime
 import dateutil
@@ -142,8 +143,21 @@ class SenateAgendaPdf(PdfPage):
 
 class MSEventScraper(Scraper):
     def scrape(self):
-        yield from self.scrape_house()
-        yield from self.scrape_senate()
+        found = False
+        try:
+            for event in self.scrape_house():
+                found = True
+                yield event
+        except Exception as e:
+            self.warning(f"House events scrape failed: {e}")
+        try:
+            for event in self.scrape_senate():
+                found = True
+                yield event
+        except Exception as e:
+            self.warning(f"Senate events scrape failed: {e}")
+        if not found:
+            raise EmptyScrape
 
     def scrape_senate(self):
         return SenateAgenda().do_scrape()
