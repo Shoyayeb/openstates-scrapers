@@ -307,7 +307,7 @@ class SCBillScraper(Scraper):
         option = None
 
         for line in pdflines.split(b"\n"):
-            line = line.strip().decode()
+            line = line.strip().decode("utf-8", errors="replace")
 
             # change what is being recorded
             if line.startswith("YEAS") or line.startswith("AYES"):
