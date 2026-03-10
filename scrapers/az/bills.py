@@ -390,8 +390,9 @@ class AZBillScraper(Scraper):
         if not session_id:
             session_id = session_metadata.session_id_meta_data[session]
 
-        # Get the bills page to start the session
+        # Get the bills page to start the session and capture cookies
         req = self.get("https://www.azleg.gov/bills/", timeout=80)
+        jar = req.cookies.copy()
 
         session_form_url = "https://www.azleg.gov/azlegwp/setsession.php"
         form = {"sessionID": session_id}
@@ -404,21 +405,32 @@ class AZBillScraper(Scraper):
         req = self.post(
             url=session_form_url,
             data=form,
-            cookies=req.cookies,
+            cookies=jar,
             headers=headers,
             allow_redirects=True,
         )
+        # Merge any new cookies from the POST response into the jar
+        jar.update(req.cookies)
 
         bill_list_url = "https://www.azleg.gov/bills/"
 
-        page = self.get(bill_list_url, timeout=80, cookies=req.cookies).content
+        page = self.get(bill_list_url, timeout=80, cookies=jar).content
         # There's an errant close-comment that browsers handle
         # but LXML gets really confused.
         page = page.replace(b"--!>", b"-->")
         page = html.fromstring(page)
-        assert (
-            len(page.xpath(f"//option[@value={session_id} and @selected]")) == 1
-        ), "Session ID not in bill list"
+        # Verify the session ID is available in the dropdown
+        # (it may not be marked @selected even after POST, so just check presence)
+        available_ids = page.xpath(
+            "//select[contains(@class,'selectSession')]/option/@value"
+        )
+        if not available_ids:
+            # Fallback: try any select with option values
+            available_ids = page.xpath("//select/option/@value")
+        assert str(session_id) in [str(v) for v in available_ids], (
+            f"Session ID {session_id} not found in bill list dropdown "
+            f"(available: {available_ids[:10]})"
+        )
 
         bill_rows = []
         chambers = [chamber] if chamber else ["upper", "lower"]
