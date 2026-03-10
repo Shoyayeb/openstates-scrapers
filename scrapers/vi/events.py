@@ -5,6 +5,7 @@ import lxml
 import re
 import requests
 
+from openstates.exceptions import EmptyScrape
 from openstates.scrape import Scraper, Event
 
 
@@ -43,7 +44,17 @@ class VIEventScraper(Scraper):
                 "navigator_click": "true",
             }
 
-            res = requests.post("https://legvi.org/wp-admin/admin-ajax.php", data=data)
+            try:
+                res = requests.post(
+                    "https://legvi.org/wp-admin/admin-ajax.php",
+                    data=data,
+                    timeout=30,
+                )
+            except (requests.ConnectionError, requests.Timeout):
+                self.warning(
+                    "legvi.org is unreachable; cannot scrape events calendar"
+                )
+                raise EmptyScrape("legvi.org is unreachable")
             page = json.loads(res.content)
             page = lxml.html.fromstring(page["month"])
 

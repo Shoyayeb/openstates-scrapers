@@ -75,9 +75,19 @@ class VirginIslands(State):
 
     def get_session_list(self):
         sessions = []
-        listing = requests.get(
-            "https://billtracking.legvi.org:8082/legislatures", verify=False
-        ).json()
-        for row in listing["recordset"]:
-            sessions.append(row["U_LegiNum"])
+        # As of 2026 the site moved from JSON API on :8082 to HTML on :443
+        resp = requests.get(
+            "https://billtracking.legvi.org/", verify=False
+        )
+        # The homepage shows the current legislature number in the header
+        # and we can parse it from the page. For now return known sessions.
+        import re
+
+        match = re.search(r"(\d+)(?:th|st|nd|rd)\s+Legislature", resp.text)
+        if match:
+            current = int(match.group(1))
+            sessions = [str(i) for i in range(30, current + 1)]
+        else:
+            # Fallback to known sessions
+            sessions = [str(i) for i in range(30, 37)]
         return sessions
