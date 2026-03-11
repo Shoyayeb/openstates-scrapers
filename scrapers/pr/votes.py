@@ -29,7 +29,7 @@ class PRVoteScraper(Scraper):
         # only senate votes currently scraped
         if chamber and chamber != "upper":
             return
-        if session != "2021-2024":
+        if session not in ("2021-2024", "2025-2028"):
             return
 
         yield from self.scrape_upper(session)

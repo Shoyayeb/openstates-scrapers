@@ -135,12 +135,18 @@ class VaBillScraper(Scraper):
             "legislationID": legislation_id,
         }
 
-        page = requests.get(
+        response = requests.get(
             f"{self.base_url}/LegislationEvent/api/getlegislationeventbylegislationidasync",
             params=body,
             headers=self.headers,
             verify=False,
-        ).json()
+        )
+        if not response.text:
+            self.logger.warning(
+                f"Empty actions response for {bill.identifier} (legislation_id={legislation_id})"
+            )
+            return
+        page = response.json()
 
         for row in page["LegislationEvents"]:
             when = dateutil.parser.parse(row["EventDate"]).date()
@@ -200,11 +206,17 @@ class VaBillScraper(Scraper):
             bill.add_related_bill(bill.identifier, f"{prior_session}", "prior-session")
 
     def add_sponsors(self, bill: Bill, legislation_id: str):
-        page = requests.get(
+        response = requests.get(
             f"{self.base_url}/LegislationPatron/api/GetLegislationPatronsByIdAsync/{legislation_id}",
             headers=self.headers,
             verify=False,
-        ).json()
+        )
+        if not response.text:
+            self.logger.warning(
+                f"Empty sponsors response for {bill.identifier} (legislation_id={legislation_id})"
+            )
+            return
+        page = response.json()
         sponsors = page["Patrons"]
         for row in sponsors:
             primary = True if row["Name"] == "Chief Patron" else False
