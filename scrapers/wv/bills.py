@@ -222,6 +222,9 @@ class WVBillScraper(Scraper):
             date = datetime.datetime.strptime(date, "%m/%d/%y").date()
 
             action = tds[1].text_content().strip()
+            if not action:
+                self.warning(f"Skipping action with empty description for {bill_id}")
+                continue
             if action.lower().startswith("passed senate"):
                 for href in tds[1].xpath("a/@href"):
                     yield from self.scrape_senate_vote(bill, href, date)
