@@ -81,7 +81,14 @@ class CAEventScraper(Scraper):
             msg = "More than one committee meeting at (location, date) %r"
             msg = msg % ((location, date),)
             assert len(set(hearing.committee_nr for hearing in hearings)) == 1, msg
-            committee_name = _committee_nr[hearings.pop().committee_nr]
+            committee_nr = hearings.pop().committee_nr
+            committee_name = _committee_nr.get(committee_nr)
+            if committee_name is None:
+                self.warning(
+                    "Unknown committee_nr %d at (%s, %s), skipping",
+                    committee_nr, location, date,
+                )
+                continue
 
             desc = "Committee Meeting: " + committee_name
             event = Event(
@@ -179,4 +186,5 @@ _committee_nr = {
     83: "Senate Revenue and Taxation",
     84: "Assembly Utilities and Energy",
     85: "Senate Fuel Supply and Price Spikes",
+    86: "Assembly Wildfire Prevention",
 }
