@@ -15,21 +15,21 @@ class VTBillScraper(Scraper, LXMLMixin):
         year_slug = self.jurisdiction.get_year_slug(session)
 
         # Load all bills and resolutions via the private API
-        bills_url = "http://legislature.vermont.gov/bill/loadBillsReleased/{}/".format(
+        bills_url = "https://legislature.vermont.gov/bill/loadBillsReleased/{}/".format(
             year_slug
         )
         bills_json = self.get(bills_url, verify=False).text
         bills = json.loads(bills_json)["data"] or []
 
         bills_url = (
-            "http://legislature.vermont.gov/bill/loadBillsIntroduced/{}/".format(
+            "https://legislature.vermont.gov/bill/loadBillsIntroduced/{}/".format(
                 year_slug
             )
         )
         bills_json = self.get(bills_url, verify=False).text
         bills.extend(json.loads(bills_json)["data"] or [])
 
-        resolutions_url = "http://legislature.vermont.gov/bill/loadAllResolutionsByChamber/{}/both".format(
+        resolutions_url = "https://legislature.vermont.gov/bill/loadAllResolutionsByChamber/{}/both".format(
             year_slug
         )
         resolutions_json = self.get(resolutions_url, verify=False).text
@@ -106,7 +106,7 @@ class VTBillScraper(Scraper, LXMLMixin):
                 bill.add_source(bills_url)
 
             # Load the bill's information page to access its metadata
-            bill_url = "http://legislature.vermont.gov/bill/status/{0}/{1}".format(
+            bill_url = "https://legislature.vermont.gov/bill/status/{0}/{1}".format(
                 year_slug, info["BillNumber"]
             )
             doc = self.lxmlize(bill_url)
@@ -180,7 +180,7 @@ class VTBillScraper(Scraper, LXMLMixin):
                 continue
 
             # Capture actions
-            actions_url = "http://legislature.vermont.gov/bill/loadBillDetailedStatus/{0}/{1}".format(
+            actions_url = "https://legislature.vermont.gov/bill/loadBillDetailedStatus/{0}/{1}".format(
                 year_slug, internal_bill_id
             )
             actions_json = self.get(actions_url, verify=False)
@@ -295,7 +295,7 @@ class VTBillScraper(Scraper, LXMLMixin):
 
             # Capture votes
             votes_url = (
-                "http://legislature.vermont.gov/bill/loadBillRollCalls/{0}/{1}".format(
+                "https://legislature.vermont.gov/bill/loadBillRollCalls/{0}/{1}".format(
                     year_slug, internal_bill_id
                 )
             )
@@ -309,7 +309,7 @@ class VTBillScraper(Scraper, LXMLMixin):
             for vote in votes:
                 roll_call_id = vote["VoteHeaderID"]
                 roll_call_url = (
-                    "http://legislature.vermont.gov/bill/"
+                    "https://legislature.vermont.gov/bill/"
                     "loadBillRollCallDetails/{0}/{1}".format(year_slug, roll_call_id)
                 )
                 roll_call_json = self.get(roll_call_url, verify=False).text
@@ -384,7 +384,7 @@ class VTBillScraper(Scraper, LXMLMixin):
                 yield vote_to_add
 
             # Witnesses:
-            #   http://legislature.vermont.gov/bill/loadBillWitnessList/{year_slug}/{internal_bill_id}
+            #   https://legislature.vermont.gov/bill/loadBillWitnessList/{year_slug}/{internal_bill_id}
             witnesses_doc_link_url = (
                 "https://legislature.vermont.gov/bill/print/{0}/{1}/witnesses".format(
                     year_slug, bill_id_original_format
@@ -395,7 +395,7 @@ class VTBillScraper(Scraper, LXMLMixin):
             )
 
             # Conference committee members:
-            #   http://legislature.vermont.gov/bill/loadBillConference/{year_slug}/{bill_number}
+            #   https://legislature.vermont.gov/bill/loadBillConference/{year_slug}/{bill_number}
             conferees_doc_link_url = (
                 "https://legislature.vermont.gov/bill/print/{0}/{1}/conference".format(
                     year_slug, bill_id_original_format
@@ -411,7 +411,7 @@ class VTBillScraper(Scraper, LXMLMixin):
                 )
 
             # Committee meetings:
-            #   http://legislature.vermont.gov/committee/loadHistoryByBill/{year_slug}?LegislationId={internal_bill_id}
+            #   https://legislature.vermont.gov/committee/loadHistoryByBill/{year_slug}?LegislationId={internal_bill_id}
             meetings_doc_link_url = (
                 "https://legislature.vermont.gov/bill/print/{0}/{1}/meetings".format(
                     year_slug, bill_id_original_format

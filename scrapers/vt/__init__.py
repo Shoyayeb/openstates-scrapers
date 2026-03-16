@@ -109,7 +109,7 @@ class Vermont(State):
             "identifier": "2025-2026",
             "name": "2025-2026 Regular Session",
             "start_date": "2025-01-08",
-            "end_date": "2025-05-08",
+            "end_date": "2026-05-08",
             "active": True,
         },
     ]
@@ -126,7 +126,7 @@ class Vermont(State):
 
     def get_session_list(self):
         sessions = url_xpath(
-            "http://legislature.vermont.gov/bill/search/2016",
+            "https://legislature.vermont.gov/bill/search/2016",
             '//fieldset/div[@id="Form_SelectSession_selected_session_Holder"]'
             "/div/select/option/text()",
         )
