@@ -41,12 +41,14 @@ class NHEventScraper(Scraper, LXMLMixin):
         page = self.get(
             url,
             headers={
+                "x-oxylabs-force-headers": "1",
                 "Accept": "Accept: application/json, text/javascript, */*; q=0.01",
                 "X-Requested-With": "XMLHttpRequest",
                 "Content-Type": "application/json; charset=utf-8",
                 "Referer": f"https://gc.nh.gov/{chamber_names[chamber]}/schedule/dailyschedule.aspx",
                 "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/85.0.4183.121 Safari/537.36",
             },
+            verify=False,
         )
 
         page = json.loads(page.content)
@@ -134,7 +136,7 @@ class NHEventScraper(Scraper, LXMLMixin):
             yield event
 
     def scrape_event_details(self, event, url):
-        page = self.get(url).content
+        page = self.get(url, verify=False).content
         page = lxml.html.fromstring(page)
         page.make_links_absolute(url)
 
