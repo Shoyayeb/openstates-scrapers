@@ -285,16 +285,6 @@ class Arkansas(State):
             "classification": "primary",
             "identifier": "2026F",
             "name": "2026 Fiscal Session",
-            "start_date": "2026-04-08",
-            # TODO: update end date
-            "end_date": "2026-05-09",
-            "active": True,
-        },
-        {
-            "_scraped_name": "Fiscal Session, 2026",
-            "classification": "primary",
-            "identifier": "2026F",
-            "name": "2026 Fiscal Session",
             "start_date": "2026-02-01",
             "end_date": "2026-05-01",
             "active": True,
