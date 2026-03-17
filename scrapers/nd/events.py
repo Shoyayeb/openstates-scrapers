@@ -14,7 +14,7 @@ class NDEventsCSVScraper(Scraper):
         events_csv_url = "https://www.ndlegis.gov/legend/committee/hearings/public-schedule/?export=csv"
         events_csv_response = self.get(events_csv_url)
         events_csv_reader = csv.DictReader(
-            events_csv_response.iter_lines(decode_unicode=True)
+            events_csv_response.text.splitlines()
         )
 
         agenda_items_list = []
