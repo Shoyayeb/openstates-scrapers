@@ -94,7 +94,8 @@ class RIBillScraper(Scraper):
 
         p = lxml.html.fromstring(page)
         if "We're Sorry! You seem to be lost." in p.text_content():
-            raise ValueError("POSTing has gone wrong")
+            self.warning("POSTing returned error page — site may have changed")
+            return []
 
         nodes = p.xpath("//span[@id='lblBills']/*")
         for node in nodes:

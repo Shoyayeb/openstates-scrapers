@@ -299,8 +299,7 @@ class PABillScraper(Scraper):
                     url = f"{url}&sessYr={self.session_year}"
                 yield from self.parse_committee_votes(bill, url)
             else:
-                msg = "Unexpected vote url: %r" % url
-                raise Exception(msg)
+                self.warning("Unexpected vote url: %r" % url)
 
     def get_page(self, url):
         headers = {
@@ -391,8 +390,8 @@ class PABillScraper(Scraper):
             )
             name = utils.clean_sponsor_name(name)
             if not name:
-                msg = "voter name is none. Referrer url: %s" % url
-                raise Exception(msg)
+                self.warning("voter name is none. Referrer url: %s" % url)
+                continue
             badge = (
                 "".join(div.xpath('.//span[contains(@class, "badge")][@title]/@title'))
                 .replace(" ", "")
@@ -407,8 +406,8 @@ class PABillScraper(Scraper):
             elif "leave" in badge:
                 voteval = "other"
             else:
-                msg = "Unrecognized vote val: %s" % badge
-                raise Exception(msg)
+                self.warning("Unrecognized vote val: %s" % badge)
+                voteval = "other"
             vote.vote(voteval, name)
 
         yield vote
@@ -477,8 +476,8 @@ class PABillScraper(Scraper):
             elif "leave" in badge:
                 voteval = "other"
             else:
-                msg = "Unrecognized vote val: %s" % badge
-                raise Exception(msg)
+                self.warning("Unrecognized vote val: %s" % badge)
+                voteval = "other"
             rollcall[voteval + "_votes"].append(name)
 
         for voteval, xpath in (

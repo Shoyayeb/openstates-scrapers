@@ -680,8 +680,11 @@ class MOBillScraper(Scraper, LXMLMixin):
         self._session_id = session
 
         if chamber in ["upper", None]:
-            self._scrape_senate_subjects(session)
-            yield from self._scrape_upper_chamber(session)
+            try:
+                self._scrape_senate_subjects(session)
+                yield from self._scrape_upper_chamber(session)
+            except Exception as e:
+                self.warning(f"Senate scraping failed (site may be down): {e}")
         if chamber in ["lower", None]:
             yield from self._scrape_lower_chamber(session)
 

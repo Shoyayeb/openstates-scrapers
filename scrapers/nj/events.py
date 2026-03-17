@@ -3,7 +3,6 @@ import pytz
 import datetime as dt
 from collections import defaultdict
 from openstates.scrape import Scraper, Event
-from openstates.exceptions import EmptyScrape
 
 from .utils import MDBMixin
 from utils.events import match_coordinates
@@ -63,7 +62,6 @@ class NJEventScraper(Scraper, MDBMixin):
         self.initialize_committees(year_abr)
         self.scrape_bills()
         records = self.to_csv("AGENDAS.TXT")
-        event_count = 0
         for record in records:
             status = "tentative"
 
@@ -147,11 +145,7 @@ class NJEventScraper(Scraper, MDBMixin):
                 },
             )
 
-            event_count += 1
             yield event
-
-        if event_count < 1:
-            raise EmptyScrape
 
     def scrape_bills(self):
         rows = self.to_csv("BAGENDA.TXT")

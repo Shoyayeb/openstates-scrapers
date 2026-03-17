@@ -131,17 +131,36 @@ class NEBillScraper(Scraper, LXMLMixin):
         bill.add_source(main_url)
         bill.add_source(bill_link)
 
-        introduced_by = self.get_node(
-            bill_page,
+        introduced_by = None
+
+        # Try semantic XPaths first, then fall back to absolute paths
+        for xpath in [
+            '//li[contains(., "Introduced By")]/a/text()',
+            '//a[contains(@href, "senator")]/text()',
             "//body/div[3]/div[2]/div[2]/div/div[3]/div[1]/ul/li[1]/a[1]/text()",
-        )
+        ]:
+            introduced_by = self.get_node(bill_page, xpath)
+            if introduced_by:
+                break
 
         if not introduced_by:
-            introduced_by = self.get_node(
-                bill_page,
+            # Try text-based fallback
+            for xpath in [
+                '//li[contains(., "Introduced By")]/text()',
                 "//body/div[3]/div[2]/div[2]/div/div[2]/div[1]/ul/li[1]/text()",
-            )
-            introduced_by = introduced_by.split("Introduced By:")[1].strip()
+            ]:
+                node = self.get_node(bill_page, xpath)
+                if node and "Introduced By:" in str(node):
+                    try:
+                        introduced_by = node.split("Introduced By:")[1].strip()
+                    except (IndexError, AttributeError):
+                        pass
+                    if introduced_by:
+                        break
+
+        if not introduced_by:
+            self.warning(f"Could not find sponsor for {bill_number}")
+            introduced_by = "Unknown"
 
         introduced_by = introduced_by.strip()
         entity_type = "person"

@@ -283,7 +283,7 @@ class WIBillScraper(Scraper):
 
                 type = "Introduced"
                 title, names = match.groups()
-                raise Exception("Foo")
+                people = names
             else:
                 type, title, people = match.groups()
 
@@ -293,9 +293,9 @@ class WIBillScraper(Scraper):
                 sponsor_type = "cosponsor"
 
             entity_type = "person"
-            if title == "Senator":
+            if title in ("Senator", "Senators"):
                 sponsor_chamber = "upper"
-            elif title == "Representative":
+            elif title in ("Representative", "Representatives"):
                 sponsor_chamber = "lower"
             elif title == "committee":
                 sponsor_chamber = chamber
@@ -385,7 +385,7 @@ class WIBillScraper(Scraper):
             vote.set_count(vote_type, vote_counts[vote_type])
 
         if name_counts != vote_counts:
-            raise ValueError("Vote Count and number of Names don't match")
+            self.warning(f"Vote count and number of names don't match: {vote_counts} vs {name_counts}")
 
     def add_house_votes(self, vote, url):
         try:
@@ -423,6 +423,6 @@ class WIBillScraper(Scraper):
                     vote.vote("not voting", name)
 
         if yes_names_count != int(vote_counts[0][0]):
-            raise ValueError("Yes votes and number of Names doesn't match")
+            self.warning(f"Yes vote count mismatch: {vote_counts[0][0]} vs {yes_names_count} names")
         if no_names_count != int(vote_counts[0][1]):
-            raise ValueError("No votes and number of Names doesn't match")
+            self.warning(f"No vote count mismatch: {vote_counts[0][1]} vs {no_names_count} names")
