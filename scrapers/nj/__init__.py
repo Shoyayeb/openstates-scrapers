@@ -1,7 +1,7 @@
 import requests
 from openstates.scrape import State
 from .bills import NJBillScraper
-from .events import NJEventScraper
+from .events import NJEventScraper as NJEventMDBScraper
 from .bills_web import NJBillScraper as NJBillWebScraper
 from .events_web import NJEventScraper as NJEventWebScraper
 
@@ -13,8 +13,8 @@ class NewJersey(State):
     scrapers = {
         "bills": NJBillScraper,
         "bills_web": NJBillWebScraper,
-        "events": NJEventScraper,
-        "events_web": NJEventWebScraper,
+        "events": NJEventWebScraper,
+        "events_mdb": NJEventMDBScraper,
     }
     legislative_sessions = [
         {
