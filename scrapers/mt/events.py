@@ -56,8 +56,13 @@ class MTEventScraper(Scraper):
         page = lxml.html.fromstring(html)
         page.make_links_absolute(url)
 
-        title = page.xpath("//span[@class='headerTitle']")[0].text_content().strip()
-        location = page.xpath("//span[@id='location']")[0].text_content().strip()
+        title_els = page.xpath("//span[@class='headerTitle']")
+        if not title_els:
+            self.warning(f"No headerTitle found on {url} — skipping event")
+            return
+        title = title_els[0].text_content().strip()
+        location_els = page.xpath("//span[@id='location']")
+        location = location_els[0].text_content().strip() if location_els else "Unknown"
 
         # handle edge case where event is named simply "Other"
         # append the location name to force it into not being a duplicate
