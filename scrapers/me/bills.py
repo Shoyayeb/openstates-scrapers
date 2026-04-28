@@ -20,13 +20,14 @@ class MEBillScraper(Scraper):
     categorizer = Categorizer()
     _tz = pytz.timezone("US/Eastern")
 
-    def scrape(self, chamber=None, session=None):
+    def scrape(self, chamber=None, session=None, first_item=1):
+        first_item = int(first_item)  # parse string arg from CLI to int
         chambers = [chamber] if chamber is not None else ["upper", "lower"]
 
         for chamber in chambers:
-            yield from self.scrape_chamber(chamber, session)
+            yield from self.scrape_chamber(chamber, session, first_item)
 
-    def scrape_chamber(self, chamber, session):
+    def scrape_chamber(self, chamber, session, first_item=1):
         # Create a Bill for each Paper of the chamber's session
         request_session = requests.Session()
         search_url = "https://legislature.maine.gov/LawMakerWeb/doadvancedsearch.asp"
@@ -51,7 +52,10 @@ class MEBillScraper(Scraper):
 
         self.seen = set()
         yield from self._recursively_process_bills(
-            request_session=request_session, chamber=chamber, session=session
+            request_session=request_session,
+            chamber=chamber,
+            session=session,
+            first_item=first_item,
         )
 
     def _recursively_process_bills(
@@ -62,6 +66,9 @@ class MEBillScraper(Scraper):
         Bill object for every Paper from the given chamber
         """
 
+        self.logger.info(
+            f"Searching bills in {chamber} starting with item {first_item}"
+        )
         url = "https://legislature.maine.gov/LawMakerWeb/searchresults.asp"
         r = request_session.get(url, params={"StartWith": first_item})
         r.raise_for_status()
@@ -71,6 +78,7 @@ class MEBillScraper(Scraper):
             for bill in bills:
                 bill_id_slug = bill.xpath("./@href")[0]
                 if bill_id_slug == "summary.asp?ID=280068396":
+                    self.logger.info("Skipping bill_id_slug ID=280068396")
                     continue
                 bill_url = "https://legislature.maine.gov/LawMakerWeb/{}".format(
                     bill_id_slug
@@ -82,6 +90,7 @@ class MEBillScraper(Scraper):
                     session in BLACKLISTED_BILL_IDS
                     and bill_id in BLACKLISTED_BILL_IDS[session]
                 ):
+                    self.logger.info(f"Skipping blacklisted bill ID {bill_id}")
                     continue
 
                 # avoid duplicates
@@ -108,8 +117,10 @@ class MEBillScraper(Scraper):
                 session=session,
                 first_item=first_item + PAGE_SIZE,
             )
+        else:
+            self.logger.info(f"Found no bills at search StartWith {first_item}")
 
-    def scrape_bill(self, bill, chamber):
+    def scrape_bill(self, bill: Bill, chamber):
         url = bill.sources[0]["url"]
         html = self.get(url).text
         page = lxml.html.fromstring(html)
@@ -270,94 +281,50 @@ class MEBillScraper(Scraper):
                     and contains(.,"Cannot find requested paper")])'
                 )
 
+                previous_title = ""
                 if not is_bill_text_missing:
                     vdoc.make_links_absolute(ver_url)
-
-                    # various versions: billtexts, billdocs, billpdfs
-                    v_links = []
-
-                    for v in range(
-                        0, len(vdoc.xpath('//span[@class="story_heading"]')) - 1
-                    ):
-                        version_title = vdoc.xpath('//span[@class="story_heading"]')[
-                            v
-                        ].text
-                        version_pdf = vdoc.xpath(
-                            "//span[@class='story_heading']/following::a[contains(@href, 'getPDF')]/@href"
+                    for row in vdoc.cssselect("span.tlnk-bill, span.tlnk-fiscal"):
+                        title = " ".join(
+                            row.xpath(
+                                ".//span[@class='story_header' or @class='story_subhead' or @class='inlineHeading']/text()"
+                            )
+                        ).strip()
+                        title = (
+                            title.replace("Text", "")
+                            .replace("RESLV ", "")
+                            .replace("ACTPUB", "")
+                            .replace("Chapter Fiscal Note", "")
+                            .strip()
                         )
-                        version_html = vdoc.xpath(
-                            "//span[@class='story_heading']/following::a[contains(@class, 'small_html_btn')]"
-                            "[contains(@href, 'asp')]/@href"
-                        )
-                        version_rtf = vdoc.xpath(
-                            "//span[@class='story_heading']/following::a[contains(@href, 'rtf')]/@href"
-                        )
-                        version_fiscal_pdf = vdoc.xpath(
-                            "//span[@class='story_heading']/following::a[contains(@href, 'fiscalpdfs')]/@href"
-                        )
-                        version_fiscal_html = vdoc.xpath(
-                            "//span[@class='story_heading']/following::a[contains(@href, 'fiscalnotes')]/@href"
-                        )
+                        classification = ""
+                        if row.xpath("parent::span[contains(@class, 'tlnk-amdblk')]"):
+                            title = f"Amendment {title}"
+                            classification = "amendment"
 
-                        # If statement is to prevent out of range errors as some
-                        # //span[@class="story_heading"] objects don't include any urls within them
-                        if len(version_pdf) > v:
-                            # Checks to see if the pdf url has already been added.
-                            # Some versions have the exact same pdfs on the individual bill pages.
-                            if version_pdf[v] in v_links:
-                                continue
-                            else:
-                                bill.add_version_link(
-                                    version_title,
-                                    version_pdf[v],
-                                    media_type="application/pdf",
-                                )
-                                v_links.append(version_pdf[v])
-
-                        if len(version_html) > v:
-                            if version_html[v] in v_links:
-                                continue
-                            else:
-                                bill.add_version_link(
-                                    version_title,
-                                    version_html[v],
-                                    media_type="text/html",
-                                )
-                                v_links.append(version_html[v])
-
-                        if len(version_rtf) > v:
-                            if version_rtf[v] in v_links:
-                                continue
-                            else:
-                                bill.add_version_link(
-                                    version_title,
-                                    version_rtf[v],
-                                    media_type="application/rtf",
-                                )
-                                v_links.append(version_rtf[v])
-
-                        if len(version_fiscal_pdf) > v:
-                            if version_fiscal_pdf[v] in v_links:
-                                continue
-                            else:
-                                bill.add_document_link(
-                                    version_title + " - Fiscal Note PDF",
-                                    version_fiscal_pdf[v],
-                                    media_type="application/pdf",
-                                )
-                                v_links.append(version_fiscal_pdf[v])
-
-                        if len(version_fiscal_html) > v:
-                            if version_fiscal_html[v] in v_links:
-                                continue
-                            else:
-                                bill.add_document_link(
-                                    version_title + " - Fiscal Note HTML",
-                                    version_fiscal_html[v],
-                                    media_type="text/html",
-                                )
-                                v_links.append(version_fiscal_html[v])
-
+                        if row.xpath(".//a[contains(@href, 'getPDF')]"):
+                            pdf_url = row.xpath(
+                                ".//a[contains(@href, 'getPDF')]/@href"
+                            )[0]
+                            bill.add_version_link(
+                                title,
+                                pdf_url,
+                                classification=classification,
+                                media_type="application/pdf",
+                                on_duplicate="ignore",
+                            )
+                        if row.xpath(".//a[contains(@href, '/fiscalpdfs/')]"):
+                            pdf_url = row.xpath(
+                                ".//a[contains(@href, 'fiscalpdfs')]/@href"
+                            )[0]
+                            bill.add_document_link(
+                                f"{previous_title} - Fiscal Note",
+                                pdf_url,
+                                classification="fiscal-note",
+                                media_type="application/pdf",
+                                on_duplicate="ignore",
+                            )
+                        previous_title = title
                     # committee actions are also on this page
                     for row in vdoc.xpath('//table[@name="CDtab"]/tr')[2:]:
                         action_date = row.xpath("td[1]/text()")[0].strip()

@@ -1,5 +1,6 @@
 import re
 import datetime
+import zoneinfo
 import urllib.parse
 import lxml.html
 from collections import defaultdict
@@ -116,12 +117,33 @@ class MNBillScraper(Scraper, LXMLMixin):
         ("Received from", "introduction"),
     )
 
-    def scrape(self, session=None, chamber=None):
+    def scrape(
+        self,
+        session=None,
+        chamber=None,
+        bill_type=None,
+        bill_num_start=None,
+        bill_num_end=None,
+        bill_has_action_since=None,
+    ):
         """
         Scrape all bills for a given chamber and a given session.
 
         This method uses the legislature's search page to collect all the bills
         for a given chamber and session.
+
+        :param session: Legislative session identifier (e.g. "2025-2026", "2025s1").
+            Defaults to the current session if not provided.
+        :param chamber: "upper" (Senate) or "lower" (House). Scrapes both chambers
+            if not provided.
+        :param bill_type: Limit scraping to a single bill type: "bill", "concurrent",
+            or "resolution". Scrapes all three types if not provided.
+        :param bill_num_start: First bill number to include (inclusive). Defaults in logic to 1.
+            Useful for partial scrapes or resuming interrupted runs.
+        :param bill_num_end: Last bill number to include (exclusive). Defaults in logic to 10000.
+            Useful for partial scrapes or resuming interrupted runs.
+        :param bill_has_action_since: If provided, only bills with a last-action date on or
+            after this date are scraped. Format: "today" or "YYYY-MM-DD" (e.g. "2026-01-01").
         """
         # If testing, print a message
         if self.is_testing():
@@ -132,11 +154,10 @@ class MNBillScraper(Scraper, LXMLMixin):
 
         chambers = [chamber] if chamber else ["upper", "lower"]
         for chamber in chambers:
-            # Get bill topics for matching later
-            self.get_bill_topics(chamber, session)
-
             # If testing and certain bills to test, only test those
             if self.is_testing() and len(self.testing_bills) > 0:
+                # Get bill topics for matching later
+                self.get_bill_topics(chamber, session)
                 for b in self.testing_bills:
                     bill_url = BILL_DETAIL_URL % (
                         self.search_chamber(chamber),
@@ -152,7 +173,18 @@ class MNBillScraper(Scraper, LXMLMixin):
                 return
             else:
                 # Find list of all bills
-                bills = self.get_full_bill_list(chamber, session)
+                bills = self.get_full_bill_list(
+                    chamber,
+                    session,
+                    bill_type,
+                    bill_num_start,
+                    bill_num_end,
+                    bill_has_action_since,
+                )
+
+                # Get bill topics for matching later, ONLY if we have bills to match them to
+                if len(bills) > 0:
+                    self.get_bill_topics(chamber, session)
 
                 # Get each bill
                 for b in bills:
@@ -160,24 +192,79 @@ class MNBillScraper(Scraper, LXMLMixin):
                         chamber, session, b["bill_url"], b["version_url"]
                     )
 
-    def get_full_bill_list(self, chamber, session):
+    def get_full_bill_list(
+        self,
+        chamber,
+        session,
+        bill_type=None,
+        bill_num_start=None,
+        bill_num_end=None,
+        bill_has_action_since=None,
+    ):
         """
         Uses the legislator search to get a full list of bills.  Search page
         returns a maximum of 500 results.
+
+        :param chamber: "upper" (Senate) or "lower" (House).
+        :param session: Legislative session identifier (e.g. "2025-2026", "2025s1").
+        :param bill_type: Limit results to a single bill type: "bill", "concurrent",
+            or "resolution". Fetches all three types if not provided.
+        :param bill_num_start: First bill number in the range to fetch (inclusive).
+            Defaults in logic to 1.
+        :param bill_num_end: Last bill number in the range to fetch (exclusive).
+            Defaults in logic to 10000. When both ``bill_num_start`` and ``bill_num_end`` are
+            given, the search stride is capped to the size of that range.
+        :param bill_has_action_since: If provided, skip any bill whose last-action date is
+            before this date. Format: "today" or "YYYY-MM-DD" (e.g. "2026-01-01").
+        :returns: List of dicts, each with ``bill_url`` and ``version_url`` keys.
         """
         search_chamber = self.search_chamber(chamber)
         search_session = self.search_session(session)
         total_rows = list()
         bills = []
         stride = 500
-        start = 0
+
+        if bill_num_start is None:
+            bill_num_start = 1
+        else:
+            bill_num_start = int(bill_num_start)
 
         # If testing, only do a few
-        total = 300 if self.is_testing() else 10000
+        if self.is_testing():
+            bill_num_start = 1
+            bill_num_end = 300
+        elif bill_num_start and bill_num_end:
+            bill_num_end = int(bill_num_end)
+            total_num = bill_num_end - bill_num_start
+            if total_num < stride:
+                stride = total_num
+        elif bill_num_end is None:
+            bill_num_end = 10000
+        else:
+            bill_num_end = int(bill_num_end)
+
+        if bill_type is None:
+            bill_types = ["bill", "concurrent", "resolution"]
+        else:
+            bill_types = [bill_type]
+
+        if bill_has_action_since is not None:
+            if bill_has_action_since == "today":
+                # special case value, we translate this to today's date
+                action_since_date = datetime.datetime.now(
+                    zoneinfo.ZoneInfo("America/Chicago")
+                ).date()
+            else:
+                action_since_date = datetime.date.fromisoformat(bill_has_action_since)
+            self.logger.info(
+                f"Scraping only bills with action equal to or greater than {action_since_date}"
+            )
+        else:
+            action_since_date = None
 
         # Get total list of rows
-        for bill_type in ("bill", "concurrent", "resolution"):
-            for start in range(0, total, stride):
+        for current_bill_type in bill_types:
+            for start in range(bill_num_start, bill_num_end, stride):
                 # body: "House" or "Senate"
                 # session: legislative session id
                 # bill: Range start-end (e.g. 1-10)
@@ -186,7 +273,7 @@ class MNBillScraper(Scraper, LXMLMixin):
                     search_session,
                     start,
                     start + stride,
-                    bill_type,
+                    current_bill_type,
                 )
                 # Parse HTML
                 html = self.get(url, verify=False).text
@@ -203,6 +290,14 @@ class MNBillScraper(Scraper, LXMLMixin):
         # Go through each row found
         for row in total_rows:
             bill = {}
+
+            # Fourth column: bill last action date — filter if bill_has_action_since is set
+            if action_since_date is not None:
+                bill_last_action_string = row.xpath("td[4]/a/text()")
+                if bill_last_action_string:
+                    bill_last_action_date = self.parse_dates(bill_last_action_string[0])
+                    if bill_last_action_date < action_since_date:
+                        continue
 
             # Second column: status link
             bill_details_link = row.xpath("td[2]/a")[0]
@@ -236,7 +331,7 @@ class MNBillScraper(Scraper, LXMLMixin):
         chamber = "upper" if chamber.lower() == "senate" else chamber
 
         # Get html and parse
-        doc = self.lxmlize(bill_detail_url)
+        doc = self.lxmlize(bill_detail_url, verify=False)
 
         # Check if bill hasn't been transmitted to the other chamber yet
         transmit_check = self.get_node(
@@ -266,7 +361,7 @@ class MNBillScraper(Scraper, LXMLMixin):
             long_desc_url = self.get_node(
                 doc, '//a[text()[contains(.,"Long Description")]]/@href'
             )
-            long_desc_page = self.lxmlize(long_desc_url)
+            long_desc_page = self.lxmlize(long_desc_url, verify=False)
             long_desc_text = self.get_node(
                 long_desc_page, "//h1/" "following-sibling::p/text()"
             )
@@ -324,7 +419,8 @@ class MNBillScraper(Scraper, LXMLMixin):
             search_chamber,
             search_session,
         )
-        html = self.get(url, verify=False).text
+        topic_list_result = self.get(url, verify=False)
+        html = topic_list_result.text
         doc = lxml.html.fromstring(html)
 
         # For testing purposes, we don't really care about getting
@@ -343,7 +439,8 @@ class MNBillScraper(Scraper, LXMLMixin):
                 "&topic[]=%s&submit_topic=GO"
                 % (BILL_DETAIL_URL_BASE, search_chamber, search_session, value)
             )
-            opt_html = self.get(opt_url, verify=False).text
+            response = self.get(opt_url, verify=False)
+            opt_html = response.text
             opt_doc = lxml.html.fromstring(opt_html)
             for bill in opt_doc.xpath("//table/tbody/tr/td[2]/a/text()"):
                 bill = self.make_bill_id(bill)

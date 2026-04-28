@@ -255,7 +255,23 @@ class Florida(State):
             "classification": "primary",
             "start_date": "2026-01-13",
             "end_date": "2026-03-13",
+            "active": False,
+        },
+        {
+            "name": "2026 Special Session D",
+            "identifier": "2026D",
+            "classification": "special",
+            "start_date": "2026-04-28",
+            "end_date": "2026-05-01",
             "active": True,
+        },
+        {
+            "name": "2026 Special Session E",
+            "identifier": "2026E",
+            "classification": "special",
+            "start_date": "2026-05-12",
+            "end_date": "2026-05-29",
+            "active": False,
         },
     ]
     ignored_scraped_sessions = [
