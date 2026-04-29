@@ -127,11 +127,15 @@ class ALBillScraper(Scraper):
 
         for row in page["data"]["instruments"]["data"]:
             chamber = self.chamber_map[row["body"]]
-            title = row["shortTitle"].strip()
+            title = (row["shortTitle"] or "").strip()
 
             # some recently filed bills have no title, but a good subject which is close
             if title == "":
-                title = row["Subject"]
+                title = (row["subject"] or "").strip()
+
+            if not title:
+                self.warning(f"No title for {row['instrumentNbr']}, skipping")
+                continue
 
             # prevent duplicates
             bill_id = row["instrumentNbr"]

@@ -394,7 +394,10 @@ class MIBillScraper(Scraper):
 
     def scrape_versions(self, bill: Bill, page: lxml.html.HtmlElement):
         for row in page.xpath("//div[@class='billDocuments']/div[@class='billDocRow']"):
-            name = row.xpath(".//div[@class='text']/span/strong/text()")[0]
+            name_elems = row.xpath(".//div[@class='text']/span/strong/text()")
+            if not name_elems:
+                continue
+            name = name_elems[0]
             if row.xpath(".//div[@class='pdf']/a/@href"):
                 bill.add_version_link(
                     name,
@@ -413,7 +416,10 @@ class MIBillScraper(Scraper):
         for row in page.xpath(
             "//div[@id='HFAAnalysisSection']/div/div[@class='billDocRow']|//div[@id='SFAAnalysisSection']/div/div[@class='billDocRow']"
         ):
-            name = row.xpath(".//div[@class='text']/span/strong/text()")[0]
+            name_elems = row.xpath(".//div[@class='text']/span/strong/text()")
+            if not name_elems:
+                continue
+            name = name_elems[0]
             if row.xpath(".//div[@class='pdf']/a/@href"):
                 bill.add_document_link(
                     name,

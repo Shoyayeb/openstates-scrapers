@@ -99,10 +99,13 @@ class PRBillScraper(Scraper):
             verify=False,
         )
         page = lxml.html.fromstring(resp.text)
-        pagelist = page.xpath(
+        pagelist_elems = page.xpath(
             '//span[contains(@class,"items-baseline")]/a/@aria-label'
-        )[-1]
-        pages = re.findall(r"\d+", pagelist)[0]
+        )
+        if not pagelist_elems:
+            self.logger.error(f"Could not find pagination for PR {chamber} bills, skipping")
+            return
+        pages = re.findall(r"\d+", pagelist_elems[-1])[0]
         for number in range(1, int(pages) + 1):
             resps = self.s.get(
                 "https://sutra.oslpr.org/medidas?cuatrienio_id={}&autores=&comision_id=&page={}".format(
@@ -364,9 +367,14 @@ class PRBillScraper(Scraper):
         )
         if len(page_header_elems) > 0:
             page_header_text = page_header_elems[0].strip()
-            bill_id = re.findall(r"[A-Z]{2,3}\d{4}", page_header_text)[0]
+            bill_id_matches = re.findall(r"[A-Z]{2,3}\d{4}", page_header_text)
+            if not bill_id_matches:
+                self.logger.error(f"Could not parse bill ID from header at {url}, skipping")
+                return
+            bill_id = bill_id_matches[0]
         else:
-            self.logger.error(f"Bill found with no bill identifier at {url}")
+            self.logger.error(f"Bill found with no bill identifier at {url}, skipping")
+            return
 
         bill_title_elems = page.xpath(
             '//span/strong[text()="Título:"]/../following-sibling::span'
@@ -374,7 +382,8 @@ class PRBillScraper(Scraper):
         if len(bill_title_elems) > 0:
             title = bill_title_elems[0].text_content().strip()
         else:
-            self.logger.error(f"Bill found with no title at {url}")
+            self.logger.error(f"Bill found with no title at {url}, skipping")
+            return
 
         # PR occasionally repeats a bill at different URLs (????)
         # example:
