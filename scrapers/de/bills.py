@@ -437,7 +437,11 @@ class DEBillScraper(Scraper, LXMLMixin):
             verify=False,
             headers=self.headers,
         )
-        page = response.json()
+        try:
+            page = response.json()
+        except Exception:
+            self.warning(f"Non-JSON response for actions of {bill.identifier} (status {response.status_code}), skipping")
+            return
         for row in page["Data"]:
             action_name = row["ActionDescription"]
             action_date = dt.datetime.strptime(

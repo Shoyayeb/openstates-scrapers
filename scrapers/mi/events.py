@@ -14,8 +14,14 @@ class MIEventScraper(Scraper):
     current_page = None
 
     def scrape(self):
+        from scrapelib import HTTPError as ScrapelibHTTPError
         url = "https://legislature.mi.gov/Committees/Meetings?sortBy=Calendar"
-        page = self.get(url).content
+        try:
+            page = self.get(url).content
+        except ScrapelibHTTPError as e:
+            if e.response.status_code in (403, 429):
+                raise EmptyScrape
+            raise
         page = lxml.html.fromstring(page)
         page.make_links_absolute(url)
 
