@@ -333,14 +333,19 @@ class HIBillScraper(Scraper):
         subs = [s.strip() for s in re.split(r";|,", report_title)] if report_title else []
         if "" in subs:
             subs.remove("")
+        # Defensive .get() for fields the metainf table sometimes omits — same
+        # pattern as the existing 'Report Title' guard above. The HI site
+        # occasionally returns bills without one or more of these keys (seen
+        # for newly-introduced or stub bills), which used to crash the entire
+        # scrape with KeyError.
         b = Bill(
             bill_id,
             session,
-            meta["Measure Title"],
+            meta.get("Measure Title") or bill_id,
             chamber=chamber,
             classification=bill_type,
         )
-        if meta["Description"]:
+        if meta.get("Description"):
             b.add_abstract(meta["Description"], "description")
         for subject in subs:
             b.add_subject(subject)
@@ -348,7 +353,7 @@ class HIBillScraper(Scraper):
             b.add_source(url)
 
         # check for companion bills
-        companion = meta["Companion"].strip()
+        companion = meta.get("Companion", "").strip()
         if companion:
             companion_url_elems = bill_page.xpath(
                 "//span[@id='MainContent_ListView1_companionLabel_0']/a/@href"
