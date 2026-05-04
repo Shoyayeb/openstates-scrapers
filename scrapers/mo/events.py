@@ -39,7 +39,7 @@ def add_bill_to_agenda(agenda_item, bill_text):
             prefix, raw_bill_nums = multi_bill_match.groups()
             # Slice from where the first number begins to capture all numbers,
             # including those after '&' (e.g. "HS HCS HBs 3068 & 3049" -> "3068 & 3049")
-            tail = bill_text[multi_bill_match.start(2):]
+            tail = bill_text[multi_bill_match.start(2) :]
             raw_bill_nums_list = re.findall(r"\d+", tail)
             item_bills = []
             for bill_num in raw_bill_nums_list:
