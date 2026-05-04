@@ -334,7 +334,19 @@ class DEBillScraper(Scraper, LXMLMixin):
             verify=False,
             headers=self.headers,
         )
-        page = response.json()
+        # Same defensive pattern already applied to the actions endpoint
+        # earlier in this file (b313a4e7b). The roll-call endpoint
+        # occasionally returns an HTML error page (status 200 but non-JSON
+        # body), which used to crash scrape_votes mid-stream and abort the
+        # entire bills scrape with JSONDecodeError.
+        try:
+            page = response.json()
+        except Exception:
+            self.warning(
+                f"Non-JSON response for vote {vote_id} of {bill.identifier} "
+                f"(status {response.status_code}); skipping"
+            )
+            return
 
         if page:
             roll = page["Model"]

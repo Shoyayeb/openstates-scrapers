@@ -122,10 +122,24 @@ class ALBillScraper(Scraper):
         page = requests.post(self.gql_url, headers=self.gql_headers, json=json_data)
         page = json.loads(page.content)
 
-        if page["data"]["instruments"]["count"] < 1:
+        # The AL GraphQL endpoint occasionally returns a top-level error
+        # response (e.g. {"errors": [...]}) instead of the expected data
+        # envelope — most often during deploys or rate limiting on the
+        # state's side. Without this guard the whole bill-type scrape
+        # crashes with KeyError: 'data' before any bills are fetched.
+        instruments = (page.get("data") or {}).get("instruments")
+        if not instruments:
+            self.warning(
+                f"AL GraphQL returned no 'data.instruments' for "
+                f"{bill_type}/{self.session_identifier} (errors={page.get('errors')!r}); "
+                "skipping this batch"
+            )
             return
 
-        for row in page["data"]["instruments"]["data"]:
+        if instruments.get("count", 0) < 1:
+            return
+
+        for row in instruments.get("data", []):
             chamber = self.chamber_map[row["body"]]
             title = (row["shortTitle"] or "").strip()
 
@@ -194,7 +208,7 @@ class ALBillScraper(Scraper):
             yield bill
 
         # no need to paginate again if we max the last page
-        if page["data"]["instruments"]["count"] > offset:
+        if instruments.get("count", 0) > offset:
             yield from self.scrape_bill_type(session, bill_type, offset + 50, limit)
 
     # this is one api call to grab the actions, fiscalnote, and budget isolation resolutions

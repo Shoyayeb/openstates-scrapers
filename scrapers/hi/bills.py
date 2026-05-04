@@ -390,7 +390,7 @@ class HIBillScraper(Scraper):
                     relation_type="prior-session",
                 )
 
-        for sponsor in meta["Introducer(s)"]:
+        for sponsor in meta.get("Introducer(s)") or []:
             if "(Introduced by request of another party)" in sponsor:
                 sponsor = sponsor.replace(
                     " (Introduced by request of another party)", ""
@@ -415,11 +415,11 @@ class HIBillScraper(Scraper):
         ):
             self.parse_bill_header_versions(b, bill_id, session, bill_page)
 
-        current_referral = meta["Current Referral"].strip()
+        current_referral = meta.get("Current Referral", "").strip()
         if current_referral:
             b.extras["current_referral"] = current_referral
 
-        if meta["Act"]:
+        if meta.get("Act"):
             act_num = meta["Act"]
             act_url = bill_page.xpath(f"//a[text()={act_num}]/@href")[0]
             b.add_citation(f"Hawaii {session} Acts", act_num, "chapter", url=act_url)
