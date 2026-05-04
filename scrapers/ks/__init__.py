@@ -107,22 +107,23 @@ class Kansas(State):
     ignored_scraped_sessions = []
 
     def get_session_list(self):
-        # The kslegislature.org nav has been rewritten and the "Senate Bills"
-        # anchor is no longer where the original xpath looked, so the live
-        # lookup returns nothing and the [0] indexing crashes the entire
-        # scrape on the session-list sanity check (before any bills are
-        # fetched). Treat the live lookup as a best-effort signal — if it
-        # works, great; if it fails, fall back to whatever's marked active
-        # in legislative_sessions so the rest of the scrape can proceed.
-        try:
-            url = url_xpath(
-                "https://www.kslegislature.org/li",
-                '//div[@id="nav"]//a[contains(text(), "Senate Bills")]/@href',
-            )[0]
-            return [url.split("/")[2]]
-        except (IndexError, Exception):
-            return [
-                s["_scraped_name"]
-                for s in self.legislative_sessions
-                if s.get("active") and s.get("_scraped_name")
-            ]
+        # The Kansas Legislature site moved from kslegislature.org to
+        # kslegislature.gov (.org now 301-redirects), and the new homepage
+        # no longer has the id="nav" container the previous xpath relied
+        # on. The session slug pattern itself is unchanged — bill links
+        # are still served as /b<YYYY>_<YY>/measures/... — so we collect
+        # those slugs straight from any /measures/ link on the homepage.
+        hrefs = url_xpath(
+            "https://www.kslegislature.gov/",
+            '//a[contains(@href, "/measures/")]/@href',
+        )
+        slugs: list[str] = []
+        seen: set[str] = set()
+        for href in hrefs:
+            # Drop a leading slash and any query string, then take the
+            # first path component (e.g. "b2025_26" from "/b2025_26/measures/?chamber=Senate").
+            first = href.lstrip("/").split("?", 1)[0].split("/", 1)[0]
+            if first.startswith("b") and first not in seen:
+                seen.add(first)
+                slugs.append(first)
+        return slugs
