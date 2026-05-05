@@ -5,6 +5,7 @@ import lxml.etree
 
 from openstates.utils import convert_pdf
 from openstates.scrape import Scraper, VoteEvent
+from openstates.exceptions import EmptyScrape
 
 _measure_classifiers = (
     ("Nombramiento", "NM"),
@@ -26,13 +27,24 @@ _vote_classifiers = (
 
 class PRVoteScraper(Scraper):
     def scrape(self, chamber=None, session=None):
-        # only senate votes currently scraped
+        # only senate votes currently scraped — raise EmptyScrape (instead
+        # of bare return) so the openstates CLI doesn't surface a hard
+        # ScrapeError when the lower chamber or an unsupported session is
+        # requested.
         if chamber and chamber != "upper":
-            return
+            raise EmptyScrape
         if session not in ("2021-2024", "2025-2028"):
-            return
+            raise EmptyScrape
 
-        yield from self.scrape_upper(session)
+        yielded = False
+        for vote in self.scrape_upper(session):
+            yielded = True
+            yield vote
+        if not yielded:
+            # Senate votes page sometimes returns no PDF links — between
+            # sessions, during site maintenance, etc. Treat that as an
+            # empty scrape rather than a hard failure.
+            raise EmptyScrape
 
     def scrape_upper(self, session):
         url = "https://www.senado.pr.gov/Pages/VotacionMedidas.aspx"

@@ -311,12 +311,23 @@ class NYBillScraper(Scraper):
                     primary=True,
                 )
             elif bill_data["sponsor"]["budget"] is True:
-                bill.add_sponsorship(
-                    "Budget Committee",
-                    entity_type="organization",
-                    classification="primary",
-                    primary=True,
-                )
+                # The "Budget Committee" organization isn't reliably
+                # registered in the OCD database for NY (the people repo
+                # entry is missing or under a different name), and the
+                # importer raises "cannot resolve pseudo id to
+                # Organization" on it — which aborts the entire NY
+                # import phase, not just this one bill. Until the org
+                # is added upstream, fall back to the named member when
+                # available, otherwise skip the sponsorship so the bill
+                # still imports.
+                primary_sponsor = bill_data["sponsor"].get("member")
+                if primary_sponsor is not None:
+                    bill.add_sponsorship(
+                        primary_sponsor["fullName"],
+                        entity_type="person",
+                        classification="primary",
+                        primary=True,
+                    )
             elif bill_data["sponsor"]["redistricting"] is True:
                 bill.add_sponsorship(
                     "Redistricting Committee",
