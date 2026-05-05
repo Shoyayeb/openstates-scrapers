@@ -156,21 +156,18 @@ class Tennessee(State):
             "active": True,
         },
         {
+            # Upstream added this entry (#5658) and shipped scraper fixes for
+            # the special-session index pages (#5662), then disabled the
+            # session itself (#5661) so their pipeline skips it. Per our
+            # "data anyhow" stance we keep active=True so the scraper still
+            # attempts the session — with #5662 in place it should succeed,
+            # and even partial data is better than no data for our users.
             "_scraped_name": "Second Extraordinary Session (May 2026)",
             "classification": "special",
             "identifier": "114S2",
             "name": "114th Second Extraordinary Session (May 2026)",
             "start_date": "2026-05-05",
             "end_date": "2026-05-08",
-            "active": False,
-        },
-        {
-            "_scraped_name": "Second Extraordinary Session (May 2026)",
-            "classification": "special",
-            "identifier": "114S2",
-            "name": "114th Second Extraordinary Session (May 2026)",
-            "start_date": "2026-05-01",
-            "end_date": "2026-05-31",
             "active": True,
         },
     ]

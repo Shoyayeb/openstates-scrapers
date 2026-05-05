@@ -107,16 +107,29 @@ class Kansas(State):
     ignored_scraped_sessions = []
 
     def get_session_list(self):
-        # The Kansas Legislature site moved from kslegislature.org to
-        # kslegislature.gov (.org now 301-redirects), and the new homepage
-        # no longer has the id="nav" container the previous xpath relied
-        # on. The session slug pattern itself is unchanged — bill links
-        # are still served as /b<YYYY>_<YY>/measures/... — so we collect
-        # those slugs straight from any /measures/ link on the homepage.
-        hrefs = url_xpath(
-            "https://www.kslegislature.gov/",
-            '//a[contains(@href, "/measures/")]/@href',
-        )
+        # Two-stage lookup. The kslegislature.org domain now 301-redirects
+        # to kslegislature.gov, and the new homepage no longer has the
+        # id="nav" container the original xpath relied on. The session
+        # slug format itself is unchanged — bill links are still served
+        # as /b<YYYY>_<YY>/measures/... — so we collect those slugs
+        # directly.
+        #
+        # If the markup parsing returns nothing (site down, rewrite,
+        # whatever), fall back to whichever sessions are flagged active
+        # in legislative_sessions. Upstream prefers a hard failure here
+        # so a site change can never silently re-tag bills, but our
+        # priority is data continuity for downstream alerts; the
+        # `_scraped_name` we hand back must already exist in
+        # legislative_sessions, so the worst case is no new bills, not
+        # bills assigned to a wrong session.
+        try:
+            hrefs = url_xpath(
+                "https://www.kslegislature.gov/",
+                '//a[contains(@href, "/measures/")]/@href',
+            )
+        except Exception:
+            hrefs = []
+
         slugs: list[str] = []
         seen: set[str] = set()
         for href in hrefs:
@@ -126,4 +139,14 @@ class Kansas(State):
             if first.startswith("b") and first not in seen:
                 seen.add(first)
                 slugs.append(first)
-        return slugs
+
+        if slugs:
+            return slugs
+
+        # Fallback: surface the active session so the rest of the run
+        # can proceed.
+        return [
+            s["_scraped_name"]
+            for s in self.legislative_sessions
+            if s.get("active") and s.get("_scraped_name")
+        ]
