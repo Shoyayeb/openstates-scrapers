@@ -609,6 +609,13 @@ class DEBillScraper(Scraper, LXMLMixin):
                     f"DE search returned status={response.status_code} "
                     f"content-type={ctype!r} body[:120]={response.content[:120]!r}"
                 )
+                # 4xx means the server deliberately rejected the request (403
+                # WAF block, 404 endpoint gone, 401/429 auth/rate-limit, etc.).
+                # Retrying with the same payload/headers won't change the
+                # answer; bail immediately so we hand off to API fallback
+                # without wasting ~15s per cycle on pointless retries.
+                if 400 <= response.status_code < 500:
+                    break
             if attempt < 3:
                 self.info(
                     f"DE search retry {attempt}/3 for page {page_number} "
