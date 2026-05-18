@@ -1,5 +1,6 @@
 import datetime as dt
 import json
+import time
 
 import requests
 from openstates.scrape import Scraper, Bill, VoteEvent
@@ -578,15 +579,47 @@ class DEBillScraper(Scraper, LXMLMixin):
             "toIntroDate": "",
         }
 
-        response = self.session.post(
-            url=search_form_url,
-            data=form,
-            allow_redirects=True,
-            verify=False,
-            headers=self.headers,
+        # The DE search endpoint intermittently returns an empty body or an HTML
+        # error page (cloudflare / app pool restart). The original implementation
+        # called ``response.json()`` directly, which crashed the whole scraper
+        # with ``JSONDecodeError: Expecting value: line 1 column 1 (char 0)``
+        # the moment that happened. Retry up to 3 times with backoff, and if the
+        # final response still isn't JSON, raise an error that names the
+        # endpoint so the failure is obvious in logs.
+        last_exc: Exception | None = None
+        for attempt in range(1, 4):
+            response = self.session.post(
+                url=search_form_url,
+                data=form,
+                allow_redirects=True,
+                verify=False,
+                headers=self.headers,
+            )
+            ctype = (response.headers.get("Content-Type") or "").lower()
+            body_ok = response.ok and (
+                "json" in ctype or response.content.strip().startswith((b"{", b"["))
+            )
+            if body_ok:
+                try:
+                    return response.json()
+                except ValueError as exc:
+                    last_exc = exc
+            else:
+                last_exc = RuntimeError(
+                    f"DE search returned status={response.status_code} "
+                    f"content-type={ctype!r} body[:120]={response.content[:120]!r}"
+                )
+            if attempt < 3:
+                self.info(
+                    f"DE search retry {attempt}/3 for page {page_number} "
+                    f"(status={response.status_code}); sleeping {5 * attempt}s"
+                )
+                time.sleep(5 * attempt)
+
+        raise RuntimeError(
+            f"DE search at {search_form_url} returned non-JSON after 3 attempts: "
+            f"{last_exc}"
         )
-        page = response.json()
-        return page
 
     def mime_from_link(self, link):
         if "HtmlDocument" in link:
