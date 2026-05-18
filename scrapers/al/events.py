@@ -26,10 +26,15 @@ class ALEventScraper(Scraper, LXMLMixin):
             # start from the first of the current month
             start = datetime.datetime.today().replace(day=1).strftime("%Y-%m-%d")
 
+        # NOTE: `sessionType` was removed from the Instrument type in AL's
+        # GraphQL schema (the API now returns an `errors` array with
+        # "Cannot query field 'sessionType' on type 'Instrument'"). The bills
+        # scraper handles that path; this query just drops the field so the
+        # events endpoint actually returns data.
         query = (
             'query meetings($body: OrganizationBody, $managedInLinx: Boolean, $autoScroll: Boolean!) {\n  meetings(\n    where: {body: {eq: $body}, startDate: {gte: "'
             + start
-            + '"}, managedInLinx: {eq: $managedInLinx}}\n  ) {\n    data {\n      id\n      startDate\n      startTime\n      location\n      title\n      description\n      body\n      hasPublicHearing\n      hasLiveStream\n      committee\n      agendaUrl\n      agendaItems @skip(if: $autoScroll) {\n        id\n        sessionType\n        sessionYear\n        instrumentNbr\n        shortTitle\n        matter\n        recommendation\n        hasPublicHearing\n        sponsor\n        __typename\n      }\n      __typename\n    }\n    count\n    __typename\n  }\n}'
+            + '"}, managedInLinx: {eq: $managedInLinx}}\n  ) {\n    data {\n      id\n      startDate\n      startTime\n      location\n      title\n      description\n      body\n      hasPublicHearing\n      hasLiveStream\n      committee\n      agendaUrl\n      agendaItems @skip(if: $autoScroll) {\n        id\n        sessionYear\n        instrumentNbr\n        shortTitle\n        matter\n        recommendation\n        hasPublicHearing\n        sponsor\n        __typename\n      }\n      __typename\n    }\n    count\n    __typename\n  }\n}'
         )
 
         json_data = {
@@ -43,12 +48,22 @@ class ALEventScraper(Scraper, LXMLMixin):
         page = self.post(gql_url, headers=headers, json=json_data)
         page = json.loads(page.content)
 
-        if len(page["data"]["meetings"]["data"]) == 0:
+        # GraphQL returns `{"errors": [...]}` with no `data` key when the query
+        # is rejected (e.g. another schema rename). Treat that as no events
+        # rather than KeyError-crashing the whole scheduler.
+        meetings = (page.get("data") or {}).get("meetings") or {}
+        rows = meetings.get("data") or []
+        if not rows:
+            if page.get("errors"):
+                self.logger.warning(
+                    f"AL GraphQL events returned no 'data.meetings.data' "
+                    f"(errors={page['errors']}); raising EmptyScrape"
+                )
             raise EmptyScrape
 
         event_keys = set()
 
-        for row in page["data"]["meetings"]["data"]:
+        for row in rows:
             event_date = dateutil.parser.parse(row["startDate"])
             event_title = row["title"]
             event_location = row["location"]
