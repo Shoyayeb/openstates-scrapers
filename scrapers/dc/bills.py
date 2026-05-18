@@ -96,6 +96,12 @@ class DCBillScraper(Scraper):
                             if ".pdf" in download.lower()
                             else get_media_type(download)
                         )
+                        # ``get_media_type`` returns None for unrecognised
+                        # extensions; openstates-core's schema rejects None
+                        # ("None is not of type 'string'"), which crashes the
+                        # whole DC scrape. Fall back to a generic mime so the
+                        # bill still validates and the link is preserved.
+                        mimetype = mimetype or "application/octet-stream"
                         is_version = False
                         # figure out if it's a version from type/name
                         possible_version_types = [
@@ -206,10 +212,14 @@ class DCBillScraper(Scraper):
 
                             # Documents and Versions
                             if act["attachment"]:
+                                # Default to octet-stream rather than None for
+                                # non-PDF attachments — None fails the
+                                # openstates schema's `media_type: string`
+                                # check and crashes the whole bill.
                                 mimetype = (
                                     "application/pdf"
                                     if act["attachment"].endswith("pdf")
-                                    else None
+                                    else "application/octet-stream"
                                 )
                                 is_version = False
                                 # figure out if it's a version from type/name
