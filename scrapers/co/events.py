@@ -5,7 +5,7 @@ import pytz
 import lxml
 from openstates.scrape import Scraper, Event
 
-# from openstates.exceptions import EmptyScrape
+from openstates.exceptions import EmptyScrape
 from utils.events import match_coordinates
 from utils import LXMLMixin
 
@@ -33,10 +33,21 @@ class COEventScraper(Scraper, LXMLMixin):
         return next_week_date_str
 
     def scrape(self):
-        yield from self.scrape_upcoming_events()
+        # Track whether any event was yielded. CO's schedule is often empty
+        # (recess, between weeks); openstates raises ScrapeError if a scraper
+        # returns nothing, which would abort the whole CO update and discard
+        # the already-scraped bills. EmptyScrape signals "intentionally empty"
+        # so the bills import still runs.
+        event_count = 0
+        for event in self.scrape_upcoming_events():
+            event_count += 1
+            yield event
 
         # TODO: past events aren't stable enough yet, but write a scraper to get
         # additional info when it's posted
+
+        if event_count == 0:
+            raise EmptyScrape
 
     def scrape_upcoming_events(self):
         # Start from today

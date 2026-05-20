@@ -689,9 +689,14 @@ class WABillScraper(Scraper, LXMLMixin):
         # to avoid auto-retries
         try:
             self.info(url)
-            page = requests.get(url)
-        except requests.exceptions.HTTPError:
-            # WA fires a 500 error if there's no sessions laws for a bill
+            page = requests.get(url, timeout=60)
+        except requests.exceptions.RequestException as e:
+            # WA fires a 500 error if there's no session laws for a bill, and
+            # the ASMX endpoint occasionally resets the connection mid-scrape.
+            # Either way, skip cites for this bill rather than aborting the
+            # whole WA run (a bare requests.get with no timeout could also hang
+            # indefinitely, so a 60s timeout is added).
+            self.warning(f"skipping RCW cites for {bill.identifier}: {e}")
             return
         page = lxml.etree.fromstring(page.content)
         for row in xpath(page, "//wa:RcwCiteAffected"):

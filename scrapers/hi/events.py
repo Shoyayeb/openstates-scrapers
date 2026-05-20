@@ -133,7 +133,12 @@ class HIEventScraper(Scraper):
                     ".//a[contains(@class, 'video-btn')]/@data-src"
                 )
                 video_url = video_url[0] if video_url else None
-                self.info(video_url)
-                event.add_media_link("Hearing Stream", video_url, "text/html")
+                # Only add the media link when we actually found a URL. A bare
+                # <a> with no video-btn/data-src leaves video_url None, and
+                # add_media_link(None) fails schema validation ("None is not a
+                # 'uri'"), which aborts the whole HI run after bills scraped.
+                if video_url:
+                    self.info(video_url)
+                    event.add_media_link("Hearing Stream", video_url, "text/html")
 
             yield event

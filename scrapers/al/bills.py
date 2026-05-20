@@ -329,7 +329,18 @@ class ALBillScraper(Scraper):
         page = self.post(self.gql_url, headers=self.gql_headers, json=json_data)
         page = json.loads(page.content)
 
-        data = page["data"]
+        # The GraphQL endpoint sometimes returns an error envelope with no
+        # top-level "data" key (e.g. a transient 403 or a GraphQL error). That
+        # previously raised KeyError and aborted the entire AL run. Skip the
+        # detail scrape for this bill instead so the rest of AL still imports.
+        data = page.get("data")
+        if not data:
+            self.logger.warning(
+                f"AL GraphQL returned no data for "
+                f"{bill_row.get('instrumentNbr')}, skipping detail scrape: "
+                f"{str(page)[:200]}"
+            )
+            return
         if "data" in data["histories"]:
             self.scrape_actions(bill, data["histories"], bill_row)
 
