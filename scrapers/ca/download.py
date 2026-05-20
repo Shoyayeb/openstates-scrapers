@@ -279,10 +279,40 @@ def _check_call(*args):
     subprocess.check_call(args)
 
 
-def get_zip(filename):
+def get_zip(filename, max_attempts=3):
     dirname = filename.replace(".zip", "")
-    _check_call("wget", "--no-check-certificate", BASE_URL + filename)
-    _check_call("rm", "-rf", dirname)
+    last_err = None
+    for attempt in range(1, max_attempts + 1):
+        # Remove any stale file/dir from a previous failed run first. Without
+        # this, wget writes to filename.1/.2 (it will not overwrite) and the
+        # later unzip operates on the old, possibly-truncated download. The
+        # -O flag forces the exact output name so there is only ever one file.
+        _check_call("rm", "-rf", dirname, filename)
+        _check_call(
+            "wget", "--no-check-certificate", "-O", filename, BASE_URL + filename
+        )
+        # The ~800MB CA daily dump has been observed to download corrupt
+        # (unzip exits 9: "End-of-central-directory signature not found"),
+        # which previously aborted the entire CA load. Validate the archive
+        # and retry the download instead of trusting it blindly.
+        test = subprocess.run(
+            ["unzip", "-t", filename],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+        )
+        if test.returncode == 0:
+            break
+        last_err = test.stderr.decode("utf-8", "replace")[-300:]
+        logging.warning(
+            f"{filename} failed zip integrity test "
+            f"(attempt {attempt}/{max_attempts}): {last_err}"
+        )
+    else:
+        raise RuntimeError(
+            f"{filename} still corrupt after {max_attempts} download attempts: "
+            f"{last_err}"
+        )
+
     _check_call("unzip", filename, "-d", dirname)
     _check_call("rm", "-rf", filename)
     return dirname
