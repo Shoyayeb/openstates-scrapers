@@ -6,13 +6,24 @@ import feedparser
 import lxml.html
 from scrapelib import HTTPError
 from openstates.scrape import Scraper, VoteEvent
+from openstates.exceptions import EmptyScrape
 
 
 class KSVoteScraper(Scraper):
     special_slugs = {"2020S1": "li_2020s", "2021S1": "li_2021s"}
 
     def scrape(self, session=None):
-        yield from self.scrape_bill_list(session)
+        # KS vote_view pages currently 404 ("missing vote, skipping"), so this
+        # scraper can yield zero votes. openstates raises ScrapeError on an
+        # empty scraper, which would abort the whole KS update and discard the
+        # already-scraped bills. EmptyScrape signals an intentional empty
+        # result so the bills still import.
+        vote_count = 0
+        for vote in self.scrape_bill_list(session):
+            vote_count += 1
+            yield vote
+        if vote_count == 0:
+            raise EmptyScrape
 
     def scrape_bill_list(self, session):
         meta = next(
