@@ -6,6 +6,7 @@ import lxml.etree
 from openstates.utils import convert_pdf
 from openstates.scrape import Scraper, VoteEvent
 from openstates.exceptions import EmptyScrape
+from scrapelib import HTTPError
 
 _measure_classifiers = (
     ("Nombramiento", "NM"),
@@ -49,7 +50,17 @@ class PRVoteScraper(Scraper):
     def scrape_upper(self, session):
         url = "https://www.senado.pr.gov/Pages/VotacionMedidas.aspx"
         chamber = "upper"
-        html = self.get(url).content
+        try:
+            html = self.get(url).content
+        except HTTPError as e:
+            # The Senate votes page returns 404 when it has moved or is
+            # temporarily unavailable. Yield nothing so scrape() raises
+            # EmptyScrape and the already-scraped PR bills still import,
+            # rather than letting the 404 abort the whole PR run.
+            self.logger.warning(
+                f"PR senate votes page unavailable ({e}); skipping votes"
+            )
+            return
 
         doc = lxml.html.fromstring(html)
         doc.make_links_absolute(url)
