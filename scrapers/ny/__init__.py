@@ -94,7 +94,8 @@ class NewYork(State):
         api_key = os.environ["NEW_YORK_API_KEY"]
         for start_year in range(2007, end_year + 1, 2):
             response = requests.get(
-                f"https://legislation.nysenate.gov/api/3/bills/{start_year}?limit=1&offset=1&full=True&sort=&key={api_key}"
+                f"https://legislation.nysenate.gov/api/3/bills/{start_year}?limit=1&offset=1&full=True&sort=&key={api_key}",
+                timeout=60,
             )
             if response.status_code == 200:
                 data = response.json()["result"]["items"]
