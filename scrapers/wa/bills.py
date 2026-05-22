@@ -655,10 +655,13 @@ class WABillScraper(Scraper, LXMLMixin):
         # to avoid auto-retries
         try:
             self.info(url)
-            page = requests.get(url)
+            page = requests.get(url, timeout=60)
             page = lxml.etree.fromstring(page.content)
-        except (requests.exceptions.HTTPError, lxml.etree.XMLSyntaxError):
-            # WA fires a 500 error if there's no sessions laws for a bill
+        except (requests.exceptions.RequestException, lxml.etree.XMLSyntaxError):
+            # WA fires a 500 error if there's no session laws for a bill, and
+            # the ASMX endpoint can reset/stall the connection. Catch any
+            # request error (RequestException covers HTTPError, ConnectionError
+            # and Timeout) and skip rather than aborting the whole WA run.
             return
 
         year = xpath(page, "string(wa:Year)").strip()
