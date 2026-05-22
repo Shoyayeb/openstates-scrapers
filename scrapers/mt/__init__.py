@@ -86,16 +86,18 @@ class Montana(State):
     ]
 
     def get_session_list(self):
-        # archive of sessions
+        # archive of sessions. requests has no default timeout, so cap these
+        # so a stalled api.legmt.gov cannot hang the whole MT run before it
+        # even starts scraping (this runs during the pre-scrape session check).
         url = "https://api.legmt.gov/archive/v1/sessions"
         sessions = []
-        page = requests.get(url).json()
+        page = requests.get(url, timeout=60).json()
         for row in page:
             sessions.append(str(row["sessionId"]))
 
         # incoming session can be found in another endpoint
         legislators_sessions_url = "https://api.legmt.gov/legislators/v1/sessions"
-        page = requests.get(legislators_sessions_url).json()
+        page = requests.get(legislators_sessions_url, timeout=60).json()
         for row in page:
             # skip if this session was already found above
             if row["ordinals"] in sessions:

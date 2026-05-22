@@ -142,6 +142,7 @@ class OKEventScraper(Scraper):
             headers=headers,
             allow_redirects=True,
             verify=False,
+            timeout=60,
         ).content
         page = json.loads(page)
 
