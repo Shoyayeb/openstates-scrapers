@@ -14,15 +14,18 @@ from openstates.exceptions import EmptyScrape
 class INEventScraper(Scraper):
     _tz = pytz.timezone("America/Indianapolis")
     base_url = "https://api.iga.in.gov"
-    session = date.today().year
+    # NOTE: do not name this `session` - that collides with openstates-core's
+    # HTTP `self.session_year`, which 6.25.1 closes in _create_fresh_session during
+    # __init__ (AttributeError: 'int' object has no attribute 'close').
+    session_year = date.today().year
 
     def __init__(self, *args, **kwargs):
         self.apiclient = ApiClient(self)
         super().__init__(*args, **kwargs)
 
     def scrape(self):
-        session_no = backoff(self.apiclient.get_session_no, self.session)
-        response = self.apiclient.get("meetings", session=self.session)
+        session_no = backoff(self.apiclient.get_session_no, self.session_year)
+        response = self.apiclient.get("meetings", session=self.session_year)
 
         # in returns slightly different data depending on the year. See 2024 vs 2025
         if "meetings" in response:
@@ -34,7 +37,7 @@ class INEventScraper(Scraper):
 
         for item in response["items"]:
             meeting = self.apiclient.get(
-                "meeting", session=self.session, meeting_link=item["link"]
+                "meeting", session=self.session_year, meeting_link=item["link"]
             )
 
             if meeting["cancelled"] != "False":
@@ -78,7 +81,7 @@ class INEventScraper(Scraper):
 
             location = meeting["location"] or "See Agenda"
             video_url = (
-                f"https://iga.in.gov/legislative/{self.session}/meeting/watchlive/{_id}"
+                f"https://iga.in.gov/legislative/{self.session_year}/meeting/watchlive/{_id}"
             )
 
             event = Event(
@@ -92,10 +95,10 @@ class INEventScraper(Scraper):
             event.add_source(link, note="API details")
             name_slug = re.sub("[^a-zA-Z0-9]+", "-", committee_name.lower())
 
-            document_url = f"https://iga.in.gov/pdf-documents/{session_no}/{self.session}/{committee_chamber}/committees/{committee_type}/{name_slug}/{_id}/meeting.pdf"
+            document_url = f"https://iga.in.gov/pdf-documents/{session_no}/{self.session_year}/{committee_chamber}/committees/{committee_type}/{name_slug}/{_id}/meeting.pdf"
 
             event.add_source(
-                f"https://iga.in.gov/{self.session}/committees/{committee['chamber'].lower() or 'interim'}/{name_slug}",
+                f"https://iga.in.gov/{self.session_year}/committees/{committee['chamber'].lower() or 'interim'}/{name_slug}",
                 note="Committee Schedule",
             )
             event.add_participant(committee_name, type="committee", note="host")
@@ -129,7 +132,7 @@ class INEventScraper(Scraper):
 
             for minute in meeting.get("minutes"):
                 if minute["link"]:
-                    minute_pdf_url = f"https://iga.in.gov/pdf-documents/{session_no}/{self.session}/{committee_chamber}/committees/{committee_type}/{name_slug}/{_id}/{_id}_minutes.pdf"
+                    minute_pdf_url = f"https://iga.in.gov/pdf-documents/{session_no}/{self.session_year}/{committee_chamber}/committees/{committee_type}/{name_slug}/{_id}/{_id}_minutes.pdf"
                     event.add_document(
                         "Meeting Minutes",
                         minute_pdf_url,
