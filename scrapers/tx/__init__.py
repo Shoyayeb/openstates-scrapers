@@ -252,6 +252,18 @@ class Texas(State):
     ]
 
     def get_session_list(self):
-        return url_xpath(
+        sessions = url_xpath(
             "https://capitol.texas.gov/", '//select[@name="cboLegSess"]/option/text()'
         )
+        if sessions:
+            return sessions
+        # capitol.texas.gov occasionally returns a page without the session
+        # dropdown (transient blip / markup change), which made get_session_list
+        # return [] and abort the whole TX run with "no sessions". Fall back to
+        # the sessions we already know so a one-off empty response doesn't take
+        # TX down (data continuity over a loud failure).
+        return [
+            s["_scraped_name"]
+            for s in self.legislative_sessions
+            if s.get("_scraped_name")
+        ]
