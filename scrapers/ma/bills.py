@@ -543,7 +543,10 @@ class MABillScraper(Scraper):
         s = requests.Session()
         s.verify = False
         s.headers.update({"X-Requested-With": "XMLHttpRequest"})
-        return s.get(url)
+        # timeout so a stalled malegislature.gov connection can't hang the
+        # worker until the multi-hour SCRAPE_TIMEOUT (it raised ConnectTimeout
+        # with connect timeout=None and aborted the whole MA run mid-scrape).
+        return s.get(url, timeout=60)
 
     def replace_non_digits(self, str):
         return re.sub(r"[^\d]", "", str).strip()

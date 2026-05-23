@@ -2,15 +2,36 @@ import requests
 import lxml.html
 import logging
 import os
+import time
 
 
-def url_xpath(url, path, verify=None, user_agent=None):
+def url_xpath(url, path, verify=None, user_agent=None, timeout=60, retries=3):
     headers = {"user-agent": user_agent} if user_agent else None
 
     if verify is None:
         verify = os.getenv("VERIFY_CERTS", "True").lower() == "true"
 
-    res = requests.get(url, verify=verify, headers=headers)
+    # url_xpath is used by many states' get_session_list(), which runs before
+    # scraping. A bare requests.get with no timeout and no retry meant a single
+    # transient network blip (RemoteDisconnected, ConnectTimeout, connection
+    # reset) aborted the entire state run. Add a timeout and retry transient
+    # errors a few times with short backoff before giving up.
+    last_exc = None
+    res = None
+    for attempt in range(1, retries + 1):
+        try:
+            res = requests.get(url, verify=verify, headers=headers, timeout=timeout)
+            break
+        except requests.exceptions.RequestException as e:
+            last_exc = e
+            logging.warning(
+                f"url_xpath {url} attempt {attempt}/{retries} failed: {e}"
+            )
+            if attempt < retries:
+                time.sleep(2 * attempt)
+    if res is None:
+        raise last_exc
+
     try:
         doc = lxml.html.fromstring(res.text)
     except Exception as e:
