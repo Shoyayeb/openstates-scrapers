@@ -29,7 +29,12 @@ class NYEventScraper(Scraper):
     api_client = None
     term_start_year = None
 
-    def scrape(self, session=None, start=None, end=None):
+    def scrape(self, session=None, start=None, end=None, window=None, bill_no=None):
+        # window/bill_no are accepted (and ignored) so a single
+        # `os-update ny window=<N>d` invocation can run incrementally for the
+        # bills scraper without crashing the events scraper with an unexpected
+        # keyword argument. Events are cheap (a few seconds) and always run in
+        # full.
 
         self.api_key = os.environ["NEW_YORK_API_KEY"]
         self.api_client = OpenLegislationAPIClient(self)
