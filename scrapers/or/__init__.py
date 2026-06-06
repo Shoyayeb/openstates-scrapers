@@ -234,6 +234,9 @@ class Oregon(State):
         },
     ]
     ignored_scraped_sessions = [
+        # OR site reports this placeholder distinct from "2025-2026 Interim";
+        # ignore so check_session_list does not abort the whole OR run.
+        "2025-2026 Mock Interim",
         "Mock Session 2026",
         "Mock Session 2025",
         "Mock Session 2024",

@@ -2,6 +2,7 @@ import datetime
 import json
 
 import lxml
+import scrapelib
 from openstates.scrape import Scraper, Event
 
 import pytz
@@ -106,8 +107,18 @@ class CTEventScraper(Scraper):
             agenda_url = info["url"]
             if agenda_url:
                 full_url = f"https://www.cga.ct.gov{agenda_url}"
-                for bill in Agenda(source=URL(full_url, verify=False)).do_scrape():
-                    event.add_bill(bill)
+                try:
+                    for bill in Agenda(source=URL(full_url, verify=False)).do_scrape():
+                        event.add_bill(bill)
+                except scrapelib.HTTPError as e:
+                    # Per-event agenda PDFs sometimes 404 (link points to a
+                    # file that was moved or hasn't been posted yet). Skip
+                    # the bills for this one event rather than aborting the
+                    # whole CT events run with an uncaught HTTPError.
+                    self.warning(
+                        f"CT agenda PDF unavailable for {full_url}: {e}; "
+                        f"continuing without bill list"
+                    )
 
             yield event
 
