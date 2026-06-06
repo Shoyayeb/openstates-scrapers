@@ -82,6 +82,15 @@ class MPBillScraper(Scraper):
             bill_id = f"{bill_type} {bill_id}"
 
         title = self.get_cell_text(page, "Subject/Title")
+        if not title or not title.strip():
+            # An empty Subject/Title on the source page fails openstates'
+            # minLength schema check ('' is too short) and aborts the whole MP
+            # run at validate(). Skip the bill (with a warning) so the rest of
+            # the MP scrape still imports.
+            self.warning(
+                f"MP bill {bill_id} at {url} has empty Subject/Title; skipping"
+            )
+            return
 
         bill_type = self.bill_type_map[bill_id.split(" ")[0]]
 
