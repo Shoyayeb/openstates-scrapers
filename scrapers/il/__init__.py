@@ -190,8 +190,20 @@ class Illinois(State):
     ]
 
     def get_session_list(self):
+        # ILGA's WAF returns 403 to the default python-requests User-Agent, so we
+        # send a browser UA here. This call bypasses the scraper's normal UA
+        # rotation because it's a raw requests.get rather than self.get.
         response = requests.get(
-            "https://ilga.gov/API/Legislation/GetGeneralAssemblies", timeout=60
+            "https://ilga.gov/API/Legislation/GetGeneralAssemblies",
+            timeout=60,
+            headers={
+                "User-Agent": (
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/124.0.0.0 Safari/537.36"
+                ),
+                "Accept": "application/json, text/plain, */*",
+            },
         )
         response.raise_for_status()
         session_list = [ga["gaLabel"] for ga in response.json()]

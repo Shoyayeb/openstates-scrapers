@@ -108,6 +108,12 @@ class Georgia(State):
         },
     ]
     ignored_scraped_sessions = [
+        # GA's site began reporting a "2026 Special Session" which has no entry
+        # in legislative_sessions, which makes check_session_list abort the whole
+        # run. Ignore it here to keep the 2025-2026 regular session scraping. To
+        # actually capture this session's bills, move it into legislative_sessions
+        # and add its GA-internal SessionId to SESSION_SITE_IDS in util.py.
+        "2026 Special Session",
         "2009-2010 Regular Session",
         "2007-2008 Regular Session",
         "2005 Special Session",

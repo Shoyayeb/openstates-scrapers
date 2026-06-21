@@ -275,10 +275,11 @@ class Florida(State):
         },
     ]
     ignored_scraped_sessions = [
-        # 2026F: appeared on the FL site but not yet modeled in
-        # legislative_sessions (likely a new special session). Ignore so
+        # 2026F / 2027: appeared on the FL site but not yet modeled in
+        # legislative_sessions (new/placeholder sessions). Ignore so
         # check_session_list does not abort the whole FL run.
         "2026F",
+        "2027",
         *(str(each) for each in range(1997, 2010)),
         # 2016 Org., 2017 Org., etc
         *(f"{str(each)} Org." for each in range(1997, 2050)),

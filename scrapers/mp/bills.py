@@ -92,7 +92,20 @@ class MPBillScraper(Scraper):
             )
             return
 
-        bill_type = self.bill_type_map[bill_id.split(" ")[0]]
+        # The type prefix is the leading letters of the identifier. Some source
+        # rows omit the space (e.g. "HCommRes24-6"), so split(" ") returns the
+        # whole string and a bare dict lookup KeyErrors and aborts the entire MP
+        # run. Pull the alpha prefix with a regex and skip the bill if it maps to
+        # no known type, so one malformed row doesn't flap MP to API fallback.
+        prefix_match = re.match(r"[A-Za-z]+", bill_id.strip())
+        prefix = prefix_match.group(0) if prefix_match else ""
+        if prefix not in self.bill_type_map:
+            self.warning(
+                f"MP bill {bill_id} at {url} has unrecognized type prefix "
+                f"{prefix!r}; skipping"
+            )
+            return
+        bill_type = self.bill_type_map[prefix]
 
         bill = Bill(
             identifier=bill_id,
