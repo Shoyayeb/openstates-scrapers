@@ -74,7 +74,7 @@ class Michigan(State):
             "identifier": "2025-2026",
             "name": "2025-2026 Regular Session",
             "start_date": "2025-01-08",
-            "end_date": "2025-12-31",
+            "end_date": "2026-12-31",
             "active": True,
         },
     ]
@@ -99,6 +99,7 @@ class Michigan(State):
             for s in url_xpath(
                 "https://www.legislature.mi.gov/Search/LegDocSearch",
                 "//option/text()",
+                verify=False,
             )
             if s.strip()
         ]

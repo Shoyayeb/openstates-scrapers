@@ -12,6 +12,11 @@ from openstates.utils import convert_pdf
 BASE_URL = "https://ilga.gov"
 central = pytz.timezone("US/Central")
 
+user_agent = os.getenv("USER_AGENT", "openstates")
+
+headers = {
+    "User-Agent": user_agent,
+}
 
 session_details = {
     # TODO, fill these in once appointed
@@ -297,19 +302,37 @@ class IlBillScraper(Scraper):
             doc_type,
             params["SessionId"],
         )
-        html = self.get(url).text
+        html = self.get(url, headers=headers).text
         doc = lxml.html.fromstring(html)
         doc.make_links_absolute(url)
 
         for bill_url in doc.xpath("//table/tbody/tr/td[1]/a/@href"):
             yield bill_url
 
-    def scrape(self, session=None):
+    def scrape(self, session=None, chamber=None, bill_type_abbrv=None):
         session_id = session
         # scrape a single bill for debug
         # yield from self.scrape_bill(
-        #     'upper', '104th', 'SB', 'https://ilga.gov/Legislation/BillStatus?GAID=18&DocNum=2111&DocTypeID=SB&LegId=161644&SessionID=114'
+        #     'upper', '104th', 'HB', 'https://ilga.gov/Legislation/BillStatus?DocNum=228&GAID=18&DocTypeID=HB&LegId=155905&SessionID=114'
         # )
+
+        # Handle optional input parameters
+        if chamber and chamber not in ["lower", "upper"]:
+            self.error(f"Invalid chamber argument: {chamber}")
+        elif chamber:
+            chamber_list = [chamber]
+        else:
+            chamber_list = ["lower", "upper"]
+
+        # Note AM is the special case for Appointments
+        if bill_type_abbrv == "AM":
+            bill_type_list = []
+        elif bill_type_abbrv and bill_type_abbrv not in DOC_TYPES.keys():
+            self.error(f"Invalid bill_type_abbrv: {bill_type_abbrv}")
+        elif bill_type_abbrv:
+            bill_type_list = {bill_type_abbrv: DOC_TYPES[bill_type_abbrv]}
+        else:
+            bill_type_list = DOC_TYPES
 
         # Sessions that run from 1997 - 2002. Last few sessiosn before bills were PDFs
         if session in ["90th", "91st", "92nd"]:
@@ -317,9 +340,9 @@ class IlBillScraper(Scraper):
         else:
             urls = {}
             # Identify all bill URLs first for easier debugging
-            for chamber in ["lower", "upper"]:
+            for chamber in chamber_list:
                 for doc_type in [
-                    chamber_slug(chamber) + doc_type for doc_type in DOC_TYPES
+                    chamber_slug(chamber) + doc_type for doc_type in bill_type_list
                 ]:
                     if chamber not in urls:
                         urls[chamber] = {doc_type: []}
@@ -337,16 +360,17 @@ class IlBillScraper(Scraper):
                             chamber, session_id, chamber_doc_type, bill_url
                         )
 
-            # special non-chamber cases
-            for bill_url in self.get_bill_urls(chamber, session_id, "AM"):
-                yield from self.scrape_bill(
-                    chamber, session_id, "AM", bill_url, "appointment"
-                )
+            # special non-chamber cases, if no bill type abbreviation is specified
+            if not bill_type_abbrv or bill_type_abbrv == "AM":
+                for bill_url in self.get_bill_urls(chamber, session_id, "AM"):
+                    yield from self.scrape_bill(
+                        chamber, session_id, "AM", bill_url, "appointment"
+                    )
 
     def scrape_archive_bills(self, session):
         session_abr = session[0:2]
         url = f"{BASE_URL}/documents/legislation/legisnet{session_abr}/{session_abr}gatoc.html"
-        html = self.get(url).text
+        html = self.get(url, headers=headers).text
         doc = lxml.html.fromstring(html)
         doc.make_links_absolute(url)
         bill_numbers_sections = doc.xpath("//table//a/@href")
@@ -369,7 +393,7 @@ class IlBillScraper(Scraper):
             for bill_url in bills_urls:
                 bill_url = clean_archivebill_url(bill_url)
 
-                bill_html = self.get(bill_url).text
+                bill_html = self.get(bill_url, headers=headers).text
                 bill_doc = lxml.html.fromstring(bill_html)
                 bill_doc.make_links_absolute(bill_url)
 
@@ -395,7 +419,7 @@ class IlBillScraper(Scraper):
                         '//a[contains (., "Bill Summary")]/@href'
                     )[0]
                     summary_page_url = clean_archivebill_url(summary_page_url)
-                    summary_page_html = self.get(summary_page_url).text
+                    summary_page_html = self.get(summary_page_url, headers=headers).text
                     summary_page_doc = lxml.html.fromstring(summary_page_html)
                     summary_page_doc.make_links_absolute(summary_page_url)
                 else:
@@ -406,7 +430,7 @@ class IlBillScraper(Scraper):
                         0
                     ]
                     bill_url = clean_archivebill_url(bill_url)
-                    bill_html = self.get(bill_url).text
+                    bill_html = self.get(bill_url, headers=headers).text
                     bill_doc = lxml.html.fromstring(bill_html)
                     bill_doc.make_links_absolute(bill_url)
 
@@ -488,7 +512,7 @@ class IlBillScraper(Scraper):
 
     def scrape_bill(self, chamber, session, doc_type, url, bill_type=None):
         try:
-            html = self.get(url).text
+            html = self.get(url, headers=headers).text
             doc = lxml.html.fromstring(html)
             doc.make_links_absolute(url)
         except scrapelib.HTTPError as e:
@@ -504,7 +528,7 @@ class IlBillScraper(Scraper):
         bill_id = doc_type + bill_num
 
         title = doc.xpath(
-            '//div[contains(@class, "tab-content")]/div[contains(@class, "row")][1]//h5/text()'
+            '//div[contains(@class, "tab-content")]/div[contains(@class, "row")][1]//h2/text()'
         )[0].strip()
 
         bill = Bill(
@@ -531,7 +555,7 @@ class IlBillScraper(Scraper):
         )
         # don't add just yet; we can make them better using action data
         # actions
-        action_tds = doc.xpath('//h5[text()="Actions"]/../table//td')
+        action_tds = doc.xpath('//h2[text()="Actions"]/../table//td')
         for date, actor, action_elem in group(action_tds, 3):
             date = datetime.datetime.strptime(date.text_content().strip(), "%m/%d/%Y")
             date = date.date()
@@ -587,7 +611,7 @@ class IlBillScraper(Scraper):
         yield from self.scrape_votes(session, bill, votes_url)
 
     def scrape_documents(self, bill, version_url):
-        html = self.get(version_url).text
+        html = self.get(version_url, headers=headers).text
         doc = lxml.html.fromstring(html)
         doc.make_links_absolute(version_url)
         pdf_only = False
@@ -611,7 +635,7 @@ class IlBillScraper(Scraper):
                     # eed to visit the version's page, and get PDF link from there
                     # otherwise get a faulty "latest version"/"LV" alias/duplicate
                     url = "{}&Print=1".format(url)
-                    version_page_html = self.get(url).text
+                    version_page_html = self.get(url, headers=headers).text
                     version_page_doc = lxml.html.fromstring(version_page_html)
                     version_page_doc.make_links_absolute(url)
                     pdf_link = version_page_doc.xpath('//a[contains(@href, "PDF")]')
@@ -649,7 +673,7 @@ class IlBillScraper(Scraper):
                 bill.add_document_link(name, url)
 
     def scrape_votes(self, session, bill, votes_url):
-        html = self.get(votes_url).text
+        html = self.get(votes_url, headers=headers).text
         doc = lxml.html.fromstring(html)
         doc.make_links_absolute(votes_url)
 
@@ -709,7 +733,7 @@ class IlBillScraper(Scraper):
     def fetch_pdf_lines(self, href):
         # download the file
         try:
-            fname, resp = self.urlretrieve(href)
+            fname, resp = self.urlretrieve(href, headers=headers)
             pdflines = [
                 line.decode("utf-8", errors="replace") for line in convert_pdf(fname, "text").splitlines()
             ]

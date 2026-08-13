@@ -188,6 +188,7 @@ class BillList(HtmlListPage):
             chamber="lower" if bill_id[0] == "H" else "upper",
             classification=bill_type,
         )
+        bill._fl_house_session_number = self.input["house_session_number"]
         bill.add_source(bill_url)
 
         # normalize id from HB 0004 to H4
@@ -688,6 +689,32 @@ class UpperComVote(PdfPage):
         yield vote
 
 
+class _FLHouseWAFSource(URL):
+    """Source for flhouse.gov, which sits behind an F5 BIG-IP ASM WAF.
+
+    The WAF hands out a ``session_cookie_mfhp`` cookie that is valid for only
+    ~1 hour. spatula runs an entire scrape on a single persistent scrapelib
+    session, so any scrape lasting longer than that hour (a full FL regular
+    session takes 26+ hrs) keeps presenting the now-expired cookie. The WAF then
+    answers with a "Request Rejected" block page — served with HTTP 200 — for
+    *every* subsequent request, silently dropping all remaining House committee
+    votes for the rest of the run.
+
+    Dropping the stale flhouse.gov cookies before each request forces a fresh
+    WAF session; a cold request is served real content plus a new cookie in a
+    single response, so House lookups keep working for the whole scrape.
+    """
+
+    def get_response(self, scraper):
+        # scrapelib.Scraper subclasses requests.Session, so .cookies is the jar.
+        for cookie in [c for c in scraper.cookies if "flhouse.gov" in (c.domain or "")]:
+            try:
+                scraper.cookies.clear(cookie.domain, cookie.path, cookie.name)
+            except KeyError:
+                pass
+        return super().get_response(scraper)
+
+
 class HouseSearchPage(HtmlListPage):
     """
     House committee roll calls are not available on the Senate's
@@ -710,41 +737,17 @@ class HouseSearchPage(HtmlListPage):
         # eg entering "1A" into https://flhouse.gov/Sections/Bills/bills.aspx results in
         # a URL param that looks like billNumber=1
         bill_number = re.search(r"^\w+\s(\d+)\w*$", self.input.identifier).group(1)
-        session_number = {
-            "2026D": "116",
-            "2025C": "111",
-            "2025B": "109",
-            "2025A": "107",
-            "2025": "105",
-            "2024": "103",
-            "2023C": "104",
-            "2023B": "102",
-            "2022A": "101",
-            "2023": "99",
-            "2022D": "96",
-            "2022C": "95",
-            "2022": "93",
-            "2021B": "94",
-            "2021A": "92",
-            "2021": "90",
-            "2020": "89",
-            "2019": "87",
-            "2018": "86",
-            "2017A": "85",
-            "2017": "83",
-            "2016": "80",
-            "2015C": "82",
-            "2015B": "81",
-            "2015A": "79",
-            "2015": "76",
-            "2014O": "78",
-            "2014A": "77",
-            "2016O": "84",
-            "2026": "113",
-        }[self.input.legislative_session]
+        try:
+            session_number = self.input._fl_house_session_number
+        except AttributeError as e:
+            raise ValueError(
+                "Missing Florida House session number for "
+                f"{self.input.legislative_session}; add extras.session_number to "
+                "the session metadata in scrapers/fl/__init__.py"
+            ) from e
 
         form = {"Chamber": "B", "SessionId": session_number, "BillNumber": bill_number}
-        return URL(
+        return _FLHouseWAFSource(
             url + "?" + urlencode(form),
             method="GET",
             headers={
@@ -896,10 +899,25 @@ class HouseComVote(HtmlPage):
 
 
 class FlBillScraper(Scraper):
+    def get_house_session_number(self, session):
+        for metadata in self.jurisdiction.legislative_sessions:
+            if metadata["identifier"] == session:
+                session_number = metadata.get("extras", {}).get("session_number")
+                if session_number:
+                    return session_number
+                break
+
+        raise ValueError(
+            "Missing Florida House session number for "
+            f"{session}; add extras.session_number to the session metadata in "
+            "scrapers/fl/__init__.py"
+        )
+
     def scrape(self, session=None):
         self.raise_errors = False
         self.retry_attempts = 5
         self.retry_wait_seconds = 5
+        house_session_number = self.get_house_session_number(session)
 
         # Set up a circuit breaker to track consecutive failures
         self._consecutive_failures = 0
@@ -919,7 +937,9 @@ class FlBillScraper(Scraper):
         logging.getLogger("scrapelib").setLevel(logging.WARNING)
 
         def do_scrape_with_retry():
-            bill_list = BillList({"session": session})
+            bill_list = BillList(
+                {"session": session, "house_session_number": house_session_number}
+            )
             yield from self._process_bill_list(bill_list)
 
         # Stream results instead of collecting all with list() to allow

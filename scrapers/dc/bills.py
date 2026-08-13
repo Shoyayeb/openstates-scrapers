@@ -49,7 +49,6 @@ class DCBillScraper(Scraper):
             leg_listing = resp.json()
 
             for leg in leg_listing:
-
                 bill = Bill(
                     leg["legislationNumber"],
                     legislative_session=session,
@@ -218,8 +217,8 @@ class DCBillScraper(Scraper):
                                 # check and crashes the whole bill.
                                 mimetype = (
                                     "application/pdf"
-                                    if act["attachment"].endswith("pdf")
-                                    else "application/octet-stream"
+                                    if ".pdf" in act["attachment"].lower()
+                                    else get_media_type(act["attachment"])
                                 )
                                 is_version = False
                                 # figure out if it's a version from type/name

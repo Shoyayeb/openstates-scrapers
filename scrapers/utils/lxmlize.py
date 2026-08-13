@@ -34,13 +34,13 @@ def url_xpath(url, path, verify=None, user_agent=None, timeout=60, retries=3):
 
     try:
         doc = lxml.html.fromstring(res.text)
-    except Exception as e:
+    except Exception:
         logging.error(
             f"Failed to retrieve xpath from {url} :: returned:\n"
             f"CONTENT: {res.content} \n"
             f"RETURN CODE: {res.status_code}"
         )
-        raise Exception(e)
+        raise
     return doc.xpath(path)
 
 

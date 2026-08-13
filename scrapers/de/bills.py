@@ -1,5 +1,9 @@
 import datetime as dt
+from functools import partial
 import json
+from json.decoder import JSONDecodeError
+from requests.exceptions import JSONDecodeError as RequestsJSONDecodeError
+import random
 import time
 
 import requests
@@ -17,6 +21,10 @@ class TimeoutSession(requests.Session):
     def request(self, method, url, **kwargs):
         kwargs.setdefault("timeout", self.default_timeout)
         return super().request(method, url, **kwargs)
+class FailedBillFetch:
+    def __init__(self, bill_id, fetch_type):
+        self.bill_id = bill_id
+        self.fetch_type = fetch_type
 
 
 class DEBillScraper(Scraper, LXMLMixin):
@@ -45,7 +53,44 @@ class DEBillScraper(Scraper, LXMLMixin):
         "senatedems": "https://senatedems.delaware.gov/members/senate-district-",
     }
 
-    def scrape(self, session=None):
+    def decode_and_retry_request(
+        self, log_label, request_method, attempt=1, retries=3, raise_exception=True
+    ):
+        """
+        Delaware is giving us a lot of malformed responses that are HTTP OK nonetheless
+        Normally flakey requests could be handled by http-resilience mode, but because the HTTP response
+        is normal (just empty/not-decodable-to-JSON)
+        So we have several places where we need to retry the decode step
+        """
+        try:
+            response = request_method()
+            data = json.loads(response.content.decode("utf-8"))
+            return data
+        except (JSONDecodeError, RequestsJSONDecodeError) as error:
+            if attempt < retries:
+                min_seconds = 5
+                max_seconds = 10
+                delay = random.uniform(min_seconds, max_seconds)
+                self.warning(
+                    f"Failed to fetch {log_label} on attempt {attempt}, retrying w delay {delay}"
+                )
+                time.sleep(delay)
+                return self.decode_and_retry_request(
+                    log_label, request_method, attempt + 1, retries, raise_exception
+                )
+            else:
+                self.warning(
+                    f"Failed to fetch {log_label} on attempt {attempt} of {retries}, giving up"
+                )
+                if raise_exception:
+                    raise error
+                else:
+                    return None
+
+    def scrape(self, session=None, start_page=1, end_page=None):
+        start_page = int(start_page)
+        if end_page:
+            end_page = int(end_page)
         self.headers = {
             "x-oxylabs-force-headers": "1",
             "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
@@ -77,15 +122,26 @@ class DEBillScraper(Scraper, LXMLMixin):
         per_page = 20
 
         bills_and_votes = []
-        page_number = 1
+        page_number = start_page
         while True:
-            page = self.post_search(session, page_number, per_page)
+            post_search = partial(
+                self.post_search,
+                session=session,
+                page_number=page_number,
+                per_page=per_page,
+            )
+            page = self.decode_and_retry_request("post_search", post_search, retries=6)
             if not page["Data"]:
                 self.info("Found no more bills in pagination")
                 break
             for bill in page["Data"]:
                 bills_and_votes.extend(list(self.scrape_bill(bill, session)))
             page_number += 1
+            if end_page and page_number > end_page:
+                self.info(
+                    f"Stopping bills fetch at the specified ending page number {end_page}"
+                )
+                break
         yield from self.filter_bills(bills_and_votes)
 
     def filter_bills(self, items):
@@ -104,6 +160,14 @@ class DEBillScraper(Scraper, LXMLMixin):
             # The generator also yields VoteEvent objects
             if isinstance(bill, VoteEvent):
                 yield bill
+                continue
+
+            # The generator also includes FailedBill objects representing failures to fetch
+            # we want to log these out at the end, so putting this logic here in filter_bills()
+            if isinstance(bill, FailedBillFetch):
+                self.logger.warning(
+                    f"Failed to fetch bill {bill.bill_id} on fetch {bill.fetch_type}"
+                )
                 continue
 
             if (
@@ -178,7 +242,13 @@ class DEBillScraper(Scraper, LXMLMixin):
         html_url = f"https://legis.delaware.gov/BillDetail?LegislationId={row['LegislationId']}"
         bill.add_source(html_url, note="text/html")
 
-        html = self.lxmlize(html_url, verify=False)
+        try:
+            html = self.lxmlize(html_url, verify=False)
+        except:  # noqa: E722
+            # Collecting bills we had to skip because of failure to fetch
+            failure = FailedBillFetch(bill_id, "fetch_bill_page")
+            yield failure
+            return
 
         additional_sponsors = html.xpath(
             '//label[text()="Additional Sponsor(s):"]/following-sibling::div/a/@href'
@@ -308,18 +378,20 @@ class DEBillScraper(Scraper, LXMLMixin):
         )
         form = {"legislationId": legislation_id, "sort": "", "group": "", "filter": ""}
         self.info(f"Searching for votes for {bill.identifier}")
-        response = self.session.post(
+        request_method = partial(
+            self.session.post,
             url=votes_url,
             data=form,
             allow_redirects=True,
             verify=False,
             headers=self.headers,
         )
-        if response.content:
-            page = json.loads(response.content.decode("utf-8"))
-            if page["Total"] > 0:
-                for row in page["Data"]:
-                    yield from self.scrape_vote(bill, row["RollCallId"], session)
+        page = self.decode_and_retry_request(
+            "scrape_votes", request_method, retries=1, raise_exception=False
+        )
+        if page and page["Total"] > 0:
+            for row in page["Data"]:
+                yield from self.scrape_vote(bill, row["RollCallId"], session)
 
     def scrape_vote(self, bill, vote_id, session):
         vote_url = (
@@ -328,26 +400,17 @@ class DEBillScraper(Scraper, LXMLMixin):
         form = {"rollCallId": vote_id, "sort": "", "group": "", "filter": ""}
 
         self.info(f"Fetching vote {vote_id} for {bill.identifier}")
-        response = self.session.post(
+        request_method = partial(
+            self.session.post,
             url=vote_url,
             data=form,
             allow_redirects=True,
             verify=False,
             headers=self.headers,
         )
-        # Same defensive pattern already applied to the actions endpoint
-        # earlier in this file (b313a4e7b). The roll-call endpoint
-        # occasionally returns an HTML error page (status 200 but non-JSON
-        # body), which used to crash scrape_votes mid-stream and abort the
-        # entire bills scrape with JSONDecodeError.
-        try:
-            page = response.json()
-        except Exception:
-            self.warning(
-                f"Non-JSON response for vote {vote_id} of {bill.identifier} "
-                f"(status {response.status_code}); skipping"
-            )
-            return
+        page = self.decode_and_retry_request(
+            "scrape_vote", request_method, retries=1, raise_exception=False
+        )
 
         if page:
             roll = page["Model"]
@@ -443,17 +506,23 @@ class DEBillScraper(Scraper, LXMLMixin):
         )
         form = {"legislationId": legislation_id, "sort": "", "group": "", "filter": ""}
         self.info(f"Fetching actions for {bill.identifier}")
-        response = self.session.post(
+        request_method = partial(
+            self.session.post,
             url=actions_url,
             data=form,
             allow_redirects=True,
             verify=False,
             headers=self.headers,
         )
-        try:
-            page = response.json()
-        except Exception:
-            self.warning(f"Non-JSON response for actions of {bill.identifier} (status {response.status_code}), skipping")
+        page = self.decode_and_retry_request(
+            "scrape_actions", request_method, raise_exception=False
+        )
+        # DE sometimes returns an empty body for a bill's actions (notably for
+        # very recently introduced bills). Treat that as "no actions yet" rather
+        # than a fatal failure, so the bill is still imported. Actions will
+        # backfill automatically once DE's endpoint returns data.
+        if not page:
+            self.warning(f"No actions returned for {bill.identifier}")
             return
         for row in page["Data"]:
             action_name = row["ActionDescription"]
@@ -496,17 +565,15 @@ class DEBillScraper(Scraper, LXMLMixin):
         )
         form = {"sort": "", "group": "", "filter": ""}
         self.info(f"Fetching amendments for {bill.identifier}")
-        response = self.session.post(
+        request_method = partial(
+            self.session.post,
             url=amds_url,
             data=form,
             allow_redirects=True,
             verify=False,
             headers=self.headers,
         )
-        if response.content == b"":
-            return
-        else:
-            page = json.loads(response.content)
+        page = self.decode_and_retry_request("scrape_amendments", request_method)
 
         for row in page["Data"]:
             if row["PublicStatusName"] == "Passed":
@@ -627,6 +694,7 @@ class DEBillScraper(Scraper, LXMLMixin):
             f"DE search at {search_form_url} returned non-JSON after 3 attempts: "
             f"{last_exc}"
         )
+        return response
 
     def mime_from_link(self, link):
         if "HtmlDocument" in link:

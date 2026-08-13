@@ -12,12 +12,16 @@ from openstates.exceptions import EmptyScrape
 class MIEventScraper(Scraper):
     _tz = pytz.timezone("US/Eastern")
     current_page = None
+    verify = False
 
     def scrape(self):
         from scrapelib import HTTPError as ScrapelibHTTPError
         url = "https://legislature.mi.gov/Committees/Meetings?sortBy=Calendar"
+        # Both sides of the merge kept: upstream added `verify=False` for MI's
+        # cert chain, and the fork's 403/429 handling turns a WAF block into an
+        # EmptyScrape so the run ends cleanly instead of aborting the update.
         try:
-            page = self.get(url).content
+            page = self.get(url, verify=False).content
         except ScrapelibHTTPError as e:
             if e.response.status_code in (403, 429):
                 raise EmptyScrape
@@ -38,7 +42,7 @@ class MIEventScraper(Scraper):
     def scrape_event_page(self, url) -> Generator[Event]:
         status = "tentative"
 
-        page = self.get(url).content
+        page = self.get(url, verify=False).content
         page = lxml.html.fromstring(page)
         page.make_links_absolute(url)
 

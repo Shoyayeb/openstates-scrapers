@@ -261,7 +261,6 @@ class ALBillScraper(Scraper):
                 data {
                     instrumentNbr
                     sessionYear
-                    sessionType
                     calendarDate
                     body
                     matter
@@ -288,7 +287,6 @@ class ALBillScraper(Scraper):
                 data {
                     instrumentNbr
                     sessionYear
-                    sessionType
                     # birTitle
                     calendarDate
                     matter
