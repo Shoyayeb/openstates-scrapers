@@ -240,7 +240,23 @@ class VaCSVBillScraper(Scraper):
         if session_details.get("classification", "general") == "special":
             is_special = True
 
-        session_id = SESSION_SITE_IDS[session]
+        # The session's own metadata already carries this code as
+        # extras.session_code, and every session added upstream brings it.
+        # SESSION_SITE_IDS is hand-maintained and was not edited when the 2027
+        # session landed, so the lookup raised KeyError: '2027' before a single
+        # bill was scraped and every VA run fell back to the API. Prefer the
+        # metadata so a new session needs no edit here; keep the table for the
+        # older sessions, which predate extras and carry no session_code.
+        # Checked before changing: the two sources overlap on 3 sessions and
+        # disagree on none.
+        session_id = session_details.get("extras", {}).get(
+            "session_code"
+        ) or SESSION_SITE_IDS.get(session)
+        if not session_id:
+            raise ValueError(
+                f"no site id for session {session!r}: absent from both "
+                f"legislative_sessions[].extras.session_code and SESSION_SITE_IDS"
+            )
         self._session_id = session_id
 
         # self._init_sftp(session_id)

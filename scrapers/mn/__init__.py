@@ -239,6 +239,24 @@ class Minnesota(State):
             "end_date": "2025-12-31",
             "active": False,
         },
+        # The site began listing the 95th Legislature, which was in neither
+        # list, so check_session_list aborted the run before any bill was
+        # scraped and every MN run fell back to the API. The biennium has not
+        # convened yet, so this is not active: flip it in January 2027, when
+        # the 2025-2026 entry above goes inactive.
+        # Convening date confirmed as Tuesday 12 January 2027 against the MN
+        # House schedule, and it is the second Tuesday in January, which is
+        # the same rule the 2025-01-14 start_date above follows.
+        {
+            "_scraped_name": "95th Legislature, 2027-2028",
+            "classification": "primary",
+            "identifier": "2027-2028",
+            "name": "2027-2028 Regular Session",
+            "start_date": "2027-01-12",
+            # TODO: update end_date
+            "end_date": "2028-05-22",
+            "active": False,
+        },
     ]
     ignored_scraped_sessions = [
         "85th Legislature, 2007-2008",

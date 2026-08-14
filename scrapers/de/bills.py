@@ -64,6 +64,14 @@ class DEBillScraper(Scraper, LXMLMixin):
         """
         try:
             response = request_method()
+            # Some request_methods (post_search) were hardened to retry
+            # internally and already return parsed JSON. Decoding that again
+            # raised AttributeError: 'dict' object has no attribute 'content',
+            # which is not a JSONDecodeError, so it escaped the retry below and
+            # killed the whole DE run before any bill was scraped. Pass an
+            # already-decoded body straight through rather than re-parsing it.
+            if isinstance(response, (dict, list)):
+                return response
             data = json.loads(response.content.decode("utf-8"))
             return data
         except (JSONDecodeError, RequestsJSONDecodeError) as error:
