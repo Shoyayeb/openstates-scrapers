@@ -5,8 +5,24 @@ import os
 import time
 
 
+# Sent when a caller does not name its own. requests otherwise announces
+# `python-requests/x.y`, and some legislature sites sit behind a WAF that
+# rejects that outright: Utah's returns an F5 "Request Rejected" page as
+# **HTTP 200** with a 246-byte body, so nothing raises, the xpath below simply
+# matches nothing, get_session_list() returns [] and check_session_list aborts
+# the whole state before a single bill is scraped. Measured on
+# le.utah.gov/bills/billSearch.jsp: 0/6 populated with no User-Agent, 6/6 with
+# this one. 32 states call url_xpath from get_session_list() and only three
+# named a user_agent, so the default is where this belongs. PA and OH already
+# pass their own and are unaffected.
+DEFAULT_USER_AGENT = (
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
+)
+
+
 def url_xpath(url, path, verify=None, user_agent=None, timeout=60, retries=3):
-    headers = {"user-agent": user_agent} if user_agent else None
+    headers = {"user-agent": user_agent or DEFAULT_USER_AGENT}
 
     if verify is None:
         verify = os.getenv("VERIFY_CERTS", "True").lower() == "true"
@@ -41,7 +57,17 @@ def url_xpath(url, path, verify=None, user_agent=None, timeout=60, retries=3):
             f"RETURN CODE: {res.status_code}"
         )
         raise
-    return doc.xpath(path)
+    result = doc.xpath(path)
+    # An empty match is how a WAF block looks from here: HTTP 200, no
+    # exception, nothing to retry, and a caller that returns [] and aborts a
+    # whole state. Say so, so the next one is visible rather than silent.
+    if not result:
+        logging.warning(
+            f"url_xpath {url} returned 200 but matched nothing for {path!r} "
+            f"(body {len(res.content)} bytes). If the body is tiny this is "
+            f"likely a WAF rejection served as 200."
+        )
+    return result
 
 
 class LXMLMixin(object):
