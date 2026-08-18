@@ -125,10 +125,23 @@ class Vermont(State):
         return self.site_ids.get(session, session[5:])
 
     def get_session_list(self):
+        # verify=False to match every fetch in this scraper's own bills.py,
+        # which already passes it at all eight call sites against this same
+        # host. legislature.vermont.gov serves ONLY its leaf certificate and
+        # omits the GlobalSign RSA OV SSL CA 2018 intermediate, so the chain
+        # cannot be built and python raises
+        # CERTIFICATE_VERIFY_FAILED: unable to get local issuer certificate.
+        # Browsers hide this by fetching the issuer over AIA; requests does
+        # not. The certificate itself is valid (to 2027-01-10) and the host is
+        # reachable, so this is an incomplete chain served by Vermont rather
+        # than a site that is down. This one line was the only fetch in the
+        # scraper still verifying, and it is why VT sat in SKIP_STATES being
+        # described as "unreachable" while the rest of its scraper worked.
         sessions = url_xpath(
             "https://legislature.vermont.gov/bill/search/2016",
             '//fieldset/div[@id="Form_SelectSession_selected_session_Holder"]'
             "/div/select/option/text()",
+            verify=False,
         )
         sessions = (session.replace(",", "").strip() for session in sessions)
         return sessions
