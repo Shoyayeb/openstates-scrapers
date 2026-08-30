@@ -3,6 +3,7 @@ import requests
 
 import os
 import json
+import time
 from datetime import datetime
 import lxml.html
 from openstates.scrape import Scraper, Bill, VoteEvent
@@ -546,7 +547,29 @@ class MABillScraper(Scraper):
         # timeout so a stalled malegislature.gov connection can't hang the
         # worker until the multi-hour SCRAPE_TIMEOUT (it raised ConnectTimeout
         # with connect timeout=None and aborted the whole MA run mid-scrape).
-        return s.get(url, timeout=60)
+        #
+        # RETRY, because the timeout alone only converted a hang into a fast
+        # abort. This builds its own requests.Session rather than using
+        # self.get, so it inherits none of scrapelib's retry budget and
+        # --http-resilience does nothing for it: ONE transient connect timeout
+        # on any cosponsor URL kills the entire Massachusetts run and sends the
+        # state to the API fallback. Measured 2026-08-29, when MA aborted on
+        # /Bills/194/H5539/CoSponsor while malegislature.gov was up and
+        # answering in 16ms from the same box.
+        last_exc = None
+        for attempt in range(1, 4):
+            try:
+                return s.get(url, timeout=60)
+            except requests.exceptions.RequestException as exc:
+                last_exc = exc
+                if attempt < 3:
+                    wait = 5 * attempt
+                    self.logger.warning(
+                        f"get_as_ajax {url} failed ({type(exc).__name__}, "
+                        f"attempt {attempt}/3), retrying in {wait}s"
+                    )
+                    time.sleep(wait)
+        raise last_exc
 
     def replace_non_digits(self, str):
         return re.sub(r"[^\d]", "", str).strip()

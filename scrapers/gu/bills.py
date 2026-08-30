@@ -24,6 +24,24 @@ class GUBillScraper(Scraper):
     )
     committee_re = re.compile("([cC]ommittee on [a-zA-Z, \n]+)")
 
+    @staticmethod
+    def _link_note(title, url, default="Bill Text"):
+        """A version/document note that always satisfies `minLength: 1`.
+
+        Guam's index pages carry anchors whose text is empty or whitespace (and
+        lxml returns None for `<a><img/></a>`). Passing that through raised
+        `ScrapeValueError: '' is too short` on `versions[0].note` and aborted
+        the WHOLE Guam run, so every routine scrape fell to the API fallback
+        after 15 seconds. Fall back to the PDF filename, which is meaningful,
+        and only then to a constant.
+        """
+        cleaned = (title or "").strip()
+        if cleaned:
+            return cleaned
+        filename = (url or "").rstrip("/").rsplit("/", 1)[-1].split("?")[0]
+        filename = re.sub(r"\.pdf$", "", filename, flags=re.I).replace("%20", " ").strip()
+        return filename or default
+
     bill_prefixes = {
         "bill": "B",
         "resolution": "R",
@@ -164,18 +182,18 @@ class GUBillScraper(Scraper):
 
             for link in xml.xpath("//li")[1:]:
                 url = link.xpath("a/@href")[0]
-                title = link.xpath("a")[0].text
-                if "fiscal note" in title.lower():
+                note = self._link_note(link.xpath("a")[0].text, url)
+                if "fiscal note" in note.lower():
                     bill_obj.add_document_link(
                         url=url,
-                        note=title,
+                        note=note,
                         media_type="application/pdf",
                         on_duplicate="ignore",
                     )
                 else:
                     bill_obj.add_version_link(
                         url=url,
-                        note=title,
+                        note=note,
                         media_type="application/pdf",
                         on_duplicate="ignore",
                     )
@@ -260,18 +278,18 @@ class GUBillScraper(Scraper):
             )
         for link in xml.xpath("//li"):
             url = link.xpath("a/@href")[0]
-            title = link.xpath("a")[0].text
-            if "fiscal note" in title.lower():
+            note = self._link_note(link.xpath("a")[0].text, url)
+            if "fiscal note" in note.lower():
                 bill_obj.add_document_link(
                     url=url,
-                    note=title,
+                    note=note,
                     media_type="application/pdf",
                     on_duplicate="ignore",
                 )
             else:
                 bill_obj.add_version_link(
                     url=url,
-                    note=title,
+                    note=note,
                     media_type="application/pdf",
                     on_duplicate="ignore",
                 )
