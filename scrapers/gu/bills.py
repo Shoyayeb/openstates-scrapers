@@ -371,9 +371,18 @@ class GUBillScraper(Scraper):
             ".//a[contains(@href, '.pdf') and (contains(@href, 'History') or contains(@href, 'Res'))]"
         ):
             v_url = row.xpath("@href")[0]
-            v_title = row.text_content().strip()
+            # THE THIRD CALL SITE, and the one that kept Guam broken after the
+            # other two were fixed on 2026-08-30. It passes the note
+            # POSITIONALLY, so a grep for `note=` does not find it, and
+            # `.strip()` on an image-only or empty anchor yields '' which fails
+            # `minLength: 1` and aborts the entire run out of save_object.
+            # Every add_version_link/add_document_link in this file has now
+            # been enumerated: 153 and 297 pass constant notes and are safe.
             bill.add_version_link(
-                v_title, v_url, media_type="application/pdf", on_duplicate="ignore"
+                self._link_note(row.text_content(), v_url),
+                v_url,
+                media_type="application/pdf",
+                on_duplicate="ignore",
             )
 
         bill.add_source(url)
