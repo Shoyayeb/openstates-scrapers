@@ -175,13 +175,13 @@ class NJBillScraper(Scraper, MDBMixin):
         "NOT REP/ACS": ("Not reported out of Assembly Committee with substitute", None),
         "REP/ACA REF": (
             "Reported out of Assembly Committee with Amendments and Referred to",
-            "referral-committee",
+            ["committee-passage", "referral-committee"],
         ),
         "REP/ACS REF": (
             "Reported out of Senate Committee with Amendments and Referred to",
-            "referral-committee",
+            ["committee-passage", "referral-committee"],
         ),
-        "REP REF": ("Reported and Referred to", "referral-committee"),
+        "REP REF": ("Reported and Referred to", ["committee-passage", "referral-committee"]),
     }
 
     _com_vote_motions = {

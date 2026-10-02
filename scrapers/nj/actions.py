@@ -19,11 +19,11 @@ _categorizer_rules = (
         "referral-committee",
     ),
     Rule(r"Referred to .+ Committee", "referral-committee"),
-    Rule(r"Reported and Referred to", "referral-committee"),
+    Rule(r"Reported and Referred to", ["committee-passage", "referral-committee"]),
     Rule(r"(Transferred|Recommitted) to", "referral-committee"),
     Rule(
         r"Reported out of (Assembly|Senate) Committee with Amendments and Referred to",
-        "referral-committee",
+        ["committee-passage", "referral-committee"],
     ),
     Rule(r"Withdrawn from Consideration", "withdrawal"),
 )
