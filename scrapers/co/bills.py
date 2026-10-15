@@ -34,7 +34,15 @@ BILL_CHAMBERS = {
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+    # A browser-like Accept header is required: the CO site's bot protection
+    # returns HTTP 406 for detail-page GETs that omit it.
+    "Accept": (
+        "text/html,application/xhtml+xml,application/xml;q=0.9,"
+        "image/avif,image/webp,image/apng,*/*;q=0.8"
+    ),
     "Accept-Language": "en-US,en;q=0.9",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Upgrade-Insecure-Requests": "1",
 }
 
 
@@ -49,6 +57,11 @@ class COBillScraper(Scraper, LXMLMixin):
     def scrape(self, chamber=None, session=None):
         # If you need to scrape an individual bill for testing
         # yield from self.scrape_bill("https://leg.colorado.gov/bills/HB26-1362", "2026")
+
+        # Throttle requests to avoid HTTP 429 from leg.colorado.gov.
+        # The site rate-limits aggressive scrapers; 30 RPM keeps us well under
+        # the threshold observed in production (429s at ~60 RPM).
+        self.requests_per_minute = 30
 
         # TODO: there's a better way to do this
         for i in self.jurisdiction.legislative_sessions:
@@ -289,9 +302,13 @@ class COBillScraper(Scraper, LXMLMixin):
     def scrape_votes(self, bill: Bill, page: lxml.html.HtmlElement, chamber: str):
         # committee votes are slightly differently formatted
         for parent in page.cssselect("div#bill-activity-committees div.gen-accordion"):
-            when = parent.cssselect("button h4")[0].text_content().split("|")[0]
+            # "04/27/2026 | Senate Education (4)"; the rows can name the other
+            # chamber ("Refer Senate Bill 26-087 to the Committee of the Whole")
+            when, committee = (
+                parent.cssselect("button h4")[0].text_content().split("|", 1)
+            )
             when = dateutil.parser.parse(when, fuzzy=True).date()
-            chamber = "upper" if "Senate" in parent.text_content() else "lower"
+            chamber = "upper" if committee.strip().startswith("Senate") else "lower"
 
             for row in parent.cssselect("tbody tr"):
                 motion = self.clean(row.xpath("td[1]/span"))
@@ -329,41 +346,59 @@ class COBillScraper(Scraper, LXMLMixin):
                 vote.add_source(votes_url)
                 yield vote
 
-        for row in page.cssselect("div#bill-votes-first-chamber tbody tr"):
-            when = dateutil.parser.parse(self.clean(row.xpath("td[1]/span"))).date()
-            motion = self.clean(row.xpath("td[3]/span"))
-            ct_yes = int(self.clean(row.cssselect(".bill-votes-count-yes")))
-            ct_no = int(self.clean(row.cssselect(".bill-votes-count-no")))
-            ct_other = int(self.clean(row.cssselect(".bill-votes-count-others")))
-            chamber = "upper" if "Senate" in row.text_content() else "lower"
-
-            vote = VoteEvent(
-                chamber=chamber,
-                start_date=when,
-                motion_text=motion,
-                result="pass" if ct_yes > (ct_no + ct_other) else "fail",
-                bill=bill,
-                classification="passage",
+        # one table per chamber, headed "House Votes (3)" / "Senate Votes (1)";
+        # the rows don't name the chamber
+        for table in ("bill-votes-first-chamber", "bill-votes-second-chamber"):
+            heading = page.xpath(f"//button[@aria-controls='{table}']//h4")
+            chamber = (
+                "upper"
+                if heading and "Senate" in heading[0].text_content()
+                else "lower"
             )
+            for row in page.cssselect(f"div#{table} tbody tr"):
+                when = dateutil.parser.parse(self.clean(row.xpath("td[1]/span"))).date()
+                # the motion can be blank ("MISC" calendar, HB26-1410 2026-04-28)
+                motion = (
+                    self.clean(row.xpath("td[3]/span"))
+                    or self.clean(row.xpath("td[2]/span"))
+                    or "Floor vote"
+                )
+                ct_yes = int(self.clean(row.cssselect(".bill-votes-count-yes")))
+                ct_no = int(self.clean(row.cssselect(".bill-votes-count-no")))
+                ct_other = int(self.clean(row.cssselect(".bill-votes-count-others")))
 
-            votes_url = row.xpath("td[5]/span/a/@href")[0]
-            votes_page = self.get(votes_url, headers=HEADERS).content
-            votes_page = lxml.html.fromstring(votes_page)
+                vote = VoteEvent(
+                    chamber=chamber,
+                    start_date=when,
+                    motion_text=motion,
+                    result="pass" if ct_yes > (ct_no + ct_other) else "fail",
+                    bill=bill,
+                    classification="passage",
+                )
+                vote.set_count("yes", ct_yes)
+                vote.set_count("no", ct_no)
+                vote.set_count("other", ct_other)
 
-            vote.add_source(votes_url)
-            for vote_row in votes_page.cssselect(
-                "div.standard-table div.col-12:nth-of-type(2) table.table tr"
-            ):
-                vote_option = self.clean(vote_row.cssselect("span.vote-tag")).lower()
-                if "voice vote" not in vote_option.lower():
-                    if vote_option not in VOTE_OPTIONS:
-                        self.info(
-                            f"Couldn't find {vote_option} in choices, setting to other."
+                votes_url = row.xpath("td[5]/span/a/@href")[0]
+                votes_page = self.get(votes_url, headers=HEADERS).content
+                votes_page = lxml.html.fromstring(votes_page)
+
+                vote.add_source(votes_url)
+                for vote_row in votes_page.cssselect(
+                    "div.standard-table div.col-12:nth-of-type(2) table.table tr"
+                ):
+                    vote_option = self.clean(
+                        vote_row.cssselect("span.vote-tag")
+                    ).lower()
+                    if "voice vote" not in vote_option.lower():
+                        if vote_option not in VOTE_OPTIONS:
+                            self.info(
+                                f"Couldn't find {vote_option} in choices, setting to other."
+                            )
+                            vote_option = "other"
+                        vote.vote(
+                            vote_option,
+                            self.clean(vote_row.xpath("td[1]")),
                         )
-                        vote_option = "other"
-                    vote.vote(
-                        vote_option,
-                        self.clean(vote_row.xpath("td[1]")),
-                    )
 
-            yield vote
+                yield vote
