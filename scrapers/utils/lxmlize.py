@@ -21,6 +21,17 @@ DEFAULT_USER_AGENT = (
 )
 
 
+RETRYABLE_STATUS = {429, 500, 502, 503, 504}
+
+
+def _retry_after(res, default, cap=120):
+    """Seconds to wait before retrying, from Retry-After when it is a number."""
+    try:
+        return min(int(res.headers.get("Retry-After", "")), cap)
+    except ValueError:
+        return default
+
+
 def url_xpath(url, path, verify=None, user_agent=None, timeout=60, retries=3):
     headers = {"user-agent": user_agent or DEFAULT_USER_AGENT}
 
@@ -37,6 +48,18 @@ def url_xpath(url, path, verify=None, user_agent=None, timeout=60, retries=3):
     for attempt in range(1, retries + 1):
         try:
             res = requests.get(url, verify=verify, headers=headers, timeout=timeout)
+            # A 429 or 5xx is as transient as a reset connection. Utah answered
+            # 429 to the very first request of a run (2026-10-18 05:07 UTC) and
+            # 200 to the same URL minutes later, and without this the state
+            # went to the API fallback for a day on one refused request.
+            if res.status_code in RETRYABLE_STATUS and attempt < retries:
+                wait = _retry_after(res, default=15 * attempt)
+                logging.warning(
+                    f"url_xpath {url} attempt {attempt}/{retries} got "
+                    f"{res.status_code}; retrying in {wait}s"
+                )
+                time.sleep(wait)
+                continue
             break
         except requests.exceptions.RequestException as e:
             last_exc = e

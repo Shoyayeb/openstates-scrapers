@@ -14,7 +14,14 @@ from openstates.utils import convert_pdf
 BASE_URL = "https://ilga.gov"
 central = pytz.timezone("US/Central")
 
-user_agent = os.getenv("USER_AGENT", "openstates")
+# ILGA's WAF answers 403 to "openstates" and to python-requests on the bill
+# lists (measured from AWS, 2026-10-18) and 200 to a browser UA, the same
+# block get_session_list already works around.
+user_agent = os.getenv("USER_AGENT") or (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/124.0.0.0 Safari/537.36"
+)
 
 headers = {
     "User-Agent": user_agent,
