@@ -5,7 +5,12 @@ from openstates.scrape import State
 from .events import UTEventScraper
 from .bills import UTBillScraper
 
-user_agent = os.getenv("USER_AGENT", "openstates.org <contact@openstates.org>")
+# le.utah.gov answers 429 to this UA on every request and 200 to a browser
+# UA (3/3 each, from AWS, 2026-10-18): a block served as a rate limit.
+user_agent = os.getenv("USER_AGENT") or (
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
+)
 
 
 class Utah(State):
