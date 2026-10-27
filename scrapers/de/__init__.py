@@ -1,4 +1,4 @@
-import requests
+import scrapelib
 import lxml
 from openstates.scrape import State
 from .bills import DEBillScraper
@@ -164,7 +164,7 @@ class Delaware(State):
 
         url = "https://legis.delaware.gov/"
 
-        page = requests.get(url, headers=headers, verify=False).content
+        page = scrapelib.Scraper().get(url, headers=headers, timeout=60).content
         page = lxml.html.fromstring(page)
 
         sessions = page.xpath('//select[@id="billSearchGARefiner"]/option/text()')
