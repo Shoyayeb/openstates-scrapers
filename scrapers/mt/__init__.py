@@ -1,7 +1,7 @@
 from openstates.scrape import State
 from .bills import MTBillScraper
 from .events import MTEventScraper
-import requests
+import scrapelib
 
 
 class Montana(State):
@@ -101,13 +101,14 @@ class Montana(State):
         # even starts scraping (this runs during the pre-scrape session check).
         url = "https://api.legmt.gov/archive/v1/sessions"
         sessions = []
-        page = requests.get(url, timeout=60).json()
+        scraper = scrapelib.Scraper()
+        page = scraper.get(url, timeout=60).json()
         for row in page:
             sessions.append(str(row["sessionId"]))
 
         # incoming session can be found in another endpoint
         legislators_sessions_url = "https://api.legmt.gov/legislators/v1/sessions"
-        page = requests.get(legislators_sessions_url, timeout=60).json()
+        page = scraper.get(legislators_sessions_url, timeout=60).json()
         for row in page:
             # skip if this session was already found above
             if row["ordinals"] in sessions:
