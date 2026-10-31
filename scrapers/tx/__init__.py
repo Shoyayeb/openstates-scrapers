@@ -231,6 +231,19 @@ class Texas(State):
             "active": True,
             "extras": {"house_speaker": "Burrows"},
         },
+        # Inactive until bills exist: an active session with nothing filed
+        # fails the run on "no objects returned". Listed now so the run does
+        # not abort on an unknown session once capitol.texas.gov adds it to
+        # the dropdown for pre-filing (from 9 Nov 2026). OPS-51.
+        {
+            "_scraped_name": "90(R) - 2027",
+            "classification": "primary",
+            "identifier": "90R",
+            "name": "90th Legislature (2027)",
+            "start_date": "2027-01-12",
+            "end_date": "2027-05-31",
+            "active": False,
+        },
         # TODO: Re-enable vote scraper when adding next regular session
     ]
     ignored_scraped_sessions = [
