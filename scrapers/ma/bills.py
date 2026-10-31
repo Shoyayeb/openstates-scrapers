@@ -537,9 +537,16 @@ class MABillScraper(Scraper):
 
     def get_as_ajax(self, url):
         # set the X-Requested-With:XMLHttpRequest so the server only sends along the bits we want
-        s = requests.Session()
-        s.verify = False
-        s.headers.update({"X-Requested-With": "XMLHttpRequest"})
+        # one session for the whole run: a new Session per call paid a fresh
+        # TLS handshake on every cosponsor and history page, two or more per
+        # bill over about 18,900 bills, and MA never finished inside 6 hours
+        # (OPS-51, 2026-10-31)
+        s = getattr(self, "_ajax_session", None)
+        if s is None:
+            s = requests.Session()
+            s.verify = False
+            s.headers.update({"X-Requested-With": "XMLHttpRequest"})
+            self._ajax_session = s
         # timeout so a stalled malegislature.gov connection can't hang the
         # worker until the multi-hour SCRAPE_TIMEOUT (it raised ConnectTimeout
         # with connect timeout=None and aborted the whole MA run mid-scrape).

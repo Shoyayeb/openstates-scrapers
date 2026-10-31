@@ -803,6 +803,14 @@ def get_journal_session_url_file_part(session, chamber):
 
 
 class TXVoteScraper(Scraper):
+    def get_journal(self, url):
+        # call scrapelib directly: openstates' resilient self.get retries a 404
+        # three times with 10-120s backoff, and this loop probes four guessed
+        # journal URLs for every calendar day of the session, nearly all of
+        # them 404. A 2025 special session took over 6 hours on the retries
+        # alone and timed out every TX run (OPS-51, 2026-10-31).
+        return scrapelib.Scraper.get(self, url)
+
     def scrape(self, session=None, chamber=None, url_match=None):
         self._seen_vote_keys = set()
         self._senate_members = []
@@ -848,7 +856,7 @@ class TXVoteScraper(Scraper):
                 )
                 if url_match is None or url_match.lower() in journal_url.lower():
                     try:
-                        resp = self.get(journal_url)
+                        resp = self.get_journal(journal_url)
                     except scrapelib.HTTPError:
                         urls_failed_on_exception.append(journal_url)
                         pass
@@ -863,7 +871,7 @@ class TXVoteScraper(Scraper):
                 continuing_url = journal_url.replace("FINAL", "CFINAL")
                 if url_match is None or url_match.lower() in continuing_url.lower():
                     try:
-                        resp = self.get(continuing_url)
+                        resp = self.get_journal(continuing_url)
                     except scrapelib.HTTPError:
                         urls_failed_on_exception.append(continuing_url)
                         pass
@@ -889,7 +897,7 @@ class TXVoteScraper(Scraper):
                 )
                 if url_match is None or url_match.lower() in journal_url.lower():
                     try:
-                        resp = self.get(journal_url)
+                        resp = self.get_journal(journal_url)
                     except scrapelib.HTTPError:
                         urls_failed_on_exception.append(journal_url)
                         pass
@@ -904,7 +912,7 @@ class TXVoteScraper(Scraper):
                 continuing_url = journal_url.replace("F.", "F1.")
                 if url_match is None or url_match.lower() in continuing_url.lower():
                     try:
-                        resp = self.get(continuing_url)
+                        resp = self.get_journal(continuing_url)
                     except scrapelib.HTTPError:
                         urls_failed_on_exception.append(continuing_url)
                         pass
