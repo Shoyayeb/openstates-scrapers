@@ -112,6 +112,19 @@ class Delaware(State):
             "end_date": "2026-06-30",
             "active": True,
         },
+        # Inactive until bills exist: an active session with nothing filed
+        # fails the run on "no objects returned". Listed because
+        # legis.delaware.gov added "2026 - 2028 (GA 154)" to its session list
+        # in early November 2026, and openstates aborts the whole DE run on a
+        # session it does not know. The 154th convenes 12 Jan 2027. ETL-28.
+        {
+            "_scraped_name": "2026 - 2028 (GA 154)",
+            "identifier": "154",
+            "name": "154th General Assembly (2027-2028)",
+            "start_date": "2027-01-12",
+            "end_date": "2028-06-30",
+            "active": False,
+        },
     ]
     ignored_scraped_sessions = [
         "1932 - 1934 (GA 104)",
