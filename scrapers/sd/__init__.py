@@ -199,6 +199,17 @@ class SouthDakota(State):
             "end_date": "2026-03-31",
             "active": True,
         },
+        {
+            # Listed by sdlegislature.gov/api/Sessions since 2026-11 (SessionId
+            # 174). Inactive until it convenes, so an unknown session no longer
+            # aborts the run (LawSignals ETL-31).
+            "_scraped_name": "2027",
+            "identifier": "2027",
+            "name": "2027 Regular Session",
+            "start_date": "2027-01-12",
+            "end_date": "2027-03-31",  # Estimated
+            "active": False,
+        },
     ]
     ignored_scraped_sessions = []
 

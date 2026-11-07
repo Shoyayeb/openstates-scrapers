@@ -3,6 +3,7 @@ import dateutil.parser
 import lxml
 import re
 from openstates.scrape import Scraper, Event
+from openstates.exceptions import EmptyScrape
 from io import BytesIO
 import fitz
 
@@ -42,8 +43,19 @@ class FlEventScraper(Scraper):
         if session is None:
             session = self.latest_session()
 
-        yield from self.scrape_lower_events(session)
-        yield from self.scrape_upper_events(session)
+        found = 0
+        for event in self.scrape_lower_events(session):
+            found += 1
+            yield event
+        for event in self.scrape_upper_events(session):
+            found += 1
+            yield event
+        # Between sessions (after an election, before the organization
+        # session) neither chamber posts a meeting. An empty events scrape
+        # would otherwise fail the whole run after the bills were read
+        # (LawSignals ETL-31).
+        if not found:
+            raise EmptyScrape
 
     def scrape_lower_events(self, session):
         self.headers = {
