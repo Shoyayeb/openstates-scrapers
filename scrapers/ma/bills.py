@@ -15,6 +15,22 @@ from .actions import Categorizer
 requests.packages.urllib3.disable_warnings()
 
 
+def read_bill_list_file(path):
+    """Bill or docket numbers, one per line, spaces removed, upper case."""
+    with open(path, encoding="utf-8") as f:
+        return {line.strip().replace(" ", "").upper() for line in f if line.strip()}
+
+
+def filter_bill_list(bill_list, wanted):
+    """Keep the entries whose BillNumber or DocketNumber is wanted."""
+    return [
+        meta
+        for meta in bill_list
+        if (meta.get("BillNumber") or "").upper() in wanted
+        or (meta.get("DocketNumber") or "").upper() in wanted
+    ]
+
+
 class MABillScraper(Scraper):
     categorizer = Categorizer()
     session_filters = {}
@@ -61,10 +77,24 @@ class MABillScraper(Scraper):
     # chunks are available to split up this long, slow scrape into 12 smaller scrapes
     # os-update ma bills --scrape scrape_chunk_number=1
     # this trades off comprehensivity for limited scope of failure/faster time to recovery
+    # LawSignals ETL-28/29: `bill_list_file=<path>` scrapes only the bills named
+    # in that file (one BillNumber or DocketNumber per line, e.g. H1234 or
+    # HD567). The full MA run is about 19,000 bills at ~22 a minute, over 14 h;
+    # the caller lists the bills that moved recently, the bills new to the
+    # list, and a rotating slice of the rest, so a daily run takes ~2.5 h and
+    # every bill is still re-read within a week.
     def scrape(
-        self, chamber=None, session=None, bill_no=None, scrape_chunk_number=None
+        self,
+        chamber=None,
+        session=None,
+        bill_no=None,
+        scrape_chunk_number=None,
+        bill_list_file=None,
     ):
         self.scrape_bill_list(session)
+        if bill_list_file:
+            self.bill_list = filter_bill_list(self.bill_list, read_bill_list_file(bill_list_file))
+            self.info(f"bill_list_file: scraping {len(self.bill_list)} listed bills")
 
         # optionally scrape a single bill then exit
         if bill_no:
