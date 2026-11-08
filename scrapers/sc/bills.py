@@ -459,9 +459,12 @@ class SCBillScraper(Scraper):
         for row in bill_div.xpath("table/tr"):
             date_td, chamber_td, action_td = row.xpath("td")
 
-            date = datetime.datetime.strptime(date_td.text, "%m/%d/%y")
+            date = datetime.datetime.strptime(date_td.text.strip(), "%m/%d/%y")
+            # Some cells are padded (" Senate " on S 434 of session 126), and one
+            # such row would otherwise end the whole run. An empty cell is joint.
+            chamber = (chamber_td.text or "").strip() or None
             action_chamber = {"Senate": "upper", "House": "lower", None: "legislature"}[
-                chamber_td.text
+                chamber
             ]
 
             action = action_td.text_content()
