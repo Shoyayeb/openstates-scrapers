@@ -231,10 +231,9 @@ class Texas(State):
             "active": True,
             "extras": {"house_speaker": "Burrows"},
         },
-        # Inactive until bills exist: an active session with nothing filed
-        # fails the run on "no objects returned". Listed now so the run does
-        # not abort on an unknown session once capitol.texas.gov adds it to
-        # the dropdown for pre-filing (from 9 Nov 2026). OPS-51.
+        # Active since pre-filing opened on 9 Nov 2026 (LawSignals ETL-32). No
+        # floor votes exist yet: the votes scraper fails on "no objects
+        # returned" for 90R, so the LawSignals scheduler omits it until January.
         {
             "_scraped_name": "90(R) - 2027",
             "classification": "primary",
@@ -242,7 +241,7 @@ class Texas(State):
             "name": "90th Legislature (2027)",
             "start_date": "2027-01-12",
             "end_date": "2027-05-31",
-            "active": False,
+            "active": True,
         },
         # TODO: Re-enable vote scraper when adding next regular session
     ]
