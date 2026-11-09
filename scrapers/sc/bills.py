@@ -3,13 +3,20 @@ import scrapelib
 import datetime
 import os
 import re
+import time
 from collections import defaultdict
 from functools import wraps
 
+from openstates.exceptions import ScrapeError
 from openstates.scrape import Scraper, Bill, VoteEvent
 from openstates.utils import convert_pdf
 import lxml.html
 import urllib
+
+BILL_DIV_XPATH = '//div[@style="margin:0 0 40px 0;"]'
+EMPTY_PAGE_RETRIES = 3
+EMPTY_PAGE_WAIT_SECS = 5
+MAX_EMPTY_PAGES = 20
 
 # Workaround to prevent chunking error (thanks @showerst)
 #
@@ -129,6 +136,7 @@ def get_index_url(session, chamber, chamber_letter):
 
 
 class SCBillScraper(Scraper):
+    _empty_pages = 0
     """
     Bill scraper that pulls down all legislation on from SC website.
     Used to pull in information regarding Legislation, and basic associated metadata,
@@ -361,7 +369,38 @@ class SCBillScraper(Scraper):
         doc = lxml.html.fromstring(page)
         doc.make_links_absolute(bill_detail_url)
 
-        bill_div = doc.xpath('//div[@style="margin:0 0 40px 0;"]')[0]
+        bill_divs = doc.xpath(BILL_DIV_XPATH)
+        # LawSignals ETL-28: the site sometimes answers 200 with the result block
+        # empty (S 872, 9 November 2026), and an uncaught IndexError then ended the
+        # whole run with every later bill unscraped. The empty page is already in
+        # the scrape cache, so a retry has to ask for a different URL.
+        for attempt in range(1, EMPTY_PAGE_RETRIES + 1):
+            if bill_divs:
+                break
+            time.sleep(attempt * EMPTY_PAGE_WAIT_SECS)
+            self.warning(
+                "empty bill page %s, retry %s of %s"
+                % (bill_detail_url, attempt, EMPTY_PAGE_RETRIES)
+            )
+            separator = "&" if "?" in bill_detail_url else "?"
+            page = self.get(f"{bill_detail_url}{separator}retry={attempt}").text
+            doc = lxml.html.fromstring(page)
+            doc.make_links_absolute(bill_detail_url)
+            bill_divs = doc.xpath(BILL_DIV_XPATH)
+
+        if not bill_divs:
+            # One bad page must not cost the run, and the next run picks the bill
+            # up. A site serving these wholesale must still fail, not read as quiet.
+            self._empty_pages += 1
+            if self._empty_pages >= MAX_EMPTY_PAGES:
+                raise ScrapeError(
+                    "%s bill pages came back empty, last %s"
+                    % (self._empty_pages, bill_detail_url)
+                )
+            self.warning("SKIPPING empty bill page %s" % bill_detail_url)
+            return
+
+        bill_div = bill_divs[0]
 
         bill_type = bill_div.xpath("span/text()")[0]
 
