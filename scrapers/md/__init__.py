@@ -217,8 +217,18 @@ class Maryland(State):
             "end_date": "2026-04-13",
             "active": True,
         },
+        {
+            "_scraped_name": "2027 Regular Session",
+            "classification": "primary",
+            "identifier": "2027",
+            "name": "2027 Regular Session",
+            "start_date": "2027-01-13",
+            "end_date": "2027-04-12",
+            "active": False,
+        },
     ]
     ignored_scraped_sessions = [
+        "2026 Special Session",
         "1996 Regular Session",
         "1997 Regular Session",
         "1998 Regular Session",

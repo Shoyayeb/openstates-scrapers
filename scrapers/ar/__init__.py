@@ -298,6 +298,15 @@ class Arkansas(State):
             "end_date": "2026-08-15",
             "active": True,
         },
+        {
+            "_scraped_name": "Regular Session, 2027",
+            "classification": "primary",
+            "identifier": "2027",
+            "name": "2027 Regular Session",
+            "start_date": "2027-01-11",
+            "end_date": "2027-04-30",
+            "active": False,
+        },
     ]
     ignored_scraped_sessions = [
         "Regular Session, 2009",
