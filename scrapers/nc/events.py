@@ -41,7 +41,9 @@ class NCEventScraper(Scraper, LXMLMixin):
                 # first cal-event-row sometimes contains full date, skip that
                 time = (
                     row.xpath(
-                        'div[contains(@class,"col-12 text-left col-sm-3 text-sm-right")]'
+                        # "text-left col-sm-3 text-sm-right" became "text-start
+                        # col-sm-3 text-sm-end" in Nov 2026 (LawSignals ETL-28)
+                        'div[contains(concat(" ", normalize-space(@class), " "), " col-sm-3 ")]'
                     )[0]
                     .text_content()
                     .strip()
@@ -58,11 +60,11 @@ class NCEventScraper(Scraper, LXMLMixin):
                 chamber = ""
                 if len(
                     event_row.xpath(
-                        'span[contains(@class, "text-dark font-weight-bold")]/text()'
+                        'span[contains(@class, "text-dark") and (contains(@class, "font-weight-bold") or contains(@class, "fw-bold"))]/text()'
                     )
                 ):
                     chamber = event_row.xpath(
-                        'span[contains(@class, "text-dark font-weight-bold")]/text()'
+                        'span[contains(@class, "text-dark") and (contains(@class, "font-weight-bold") or contains(@class, "fw-bold"))]/text()'
                     )[0].strip()
                     chamber = chamber.replace(":", "")
                 if not event_row.xpath('a[contains(@href,"/Committees/")]'):

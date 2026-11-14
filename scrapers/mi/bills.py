@@ -95,7 +95,13 @@ class MIBillScraper(Scraper):
 
         title = page.xpath("string(//div[@id='ObjectSubject'])").strip()
 
-        heading = page.xpath("//h1[@id='BillHeading']/text()")[0].lower()
+        heading = page.xpath("//h1[@id='BillHeading']/text()")
+        if not heading:
+            # the site sometimes serves a page without the bill on it (HB 4218,
+            # 13 Nov 2026, fine a day later); skip the bill, not the whole run
+            self.warning(f"no BillHeading on {url}, skipping {bill_id}")
+            return
+        heading = heading[0].lower()
 
         if "house" in heading:
             chamber = "lower"

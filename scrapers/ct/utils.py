@@ -10,7 +10,9 @@ def open_csv(data):
     # and CT's bulk CSVs are mostly ASCII with occasional Windows-1252 bytes
     # (e.g. 0x96 en dash) deep in the file, so it misdetects them as ASCII.
     try:
-        text = data.content.decode("utf-8")
+        # utf-8-sig: committee.csv gained a BOM in Nov 2026, which turned its
+        # first column into "﻿comm_code" (LawSignals ETL-28)
+        text = data.content.decode("utf-8-sig")
     except UnicodeDecodeError:
         text = data.content.decode("cp1252", errors="replace")
     return csv.DictReader(StringIO(text))
