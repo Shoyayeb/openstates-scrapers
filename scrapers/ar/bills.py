@@ -463,7 +463,11 @@ class ARBillScraper(Scraper):
 
         page = self.get(url).text
         page = lxml.html.fromstring(page)
-        title = page.xpath("//h1")[0].text_content().strip()
+        # a member page outside the member's biennium is served empty (no h1),
+        # e.g. Andrews in 2025/2026S1; keep the sponsor with no chamber
+        # rather than ending the run (LawSignals ETL-28)
+        heading = page.xpath("//h1")
+        title = heading[0].text_content().strip() if heading else ""
         chamber = self.get_chamber(title)
         self.sponsors_chamber_cache[url] = chamber
 
