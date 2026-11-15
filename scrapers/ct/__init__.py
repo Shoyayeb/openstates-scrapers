@@ -160,12 +160,24 @@ class Connecticut(State):
     def get_session_list(self):
         from utils.lxmlize import url_xpath
 
-        return set(
-            [
-                x.strip()
-                for x in url_xpath(
-                    "https://search.cga.state.ct.us/r/basic/Fbuttons.asp",
-                    "//select[@name='which_year']/option/text()",
+        # search.cga.state.ct.us served IIS 503 from 14 Nov 2026 on; the bill
+        # status page on www.cga.ct.gov carries the same which_year menu
+        # (LawSignals ETL-28)
+        urls = [
+            "https://search.cga.state.ct.us/r/basic/Fbuttons.asp",
+            "https://www.cga.ct.gov/asp/cgabillstatus/cgabillstatus.asp",
+        ]
+        for i, url in enumerate(urls):
+            try:
+                # www.cga.ct.gov sends an incomplete chain (verify fails)
+                years = url_xpath(
+                    url, "//select[@name='which_year']/option/text()", verify=False
                 )
-            ]
-        )
+            except Exception:
+                if i == len(urls) - 1:
+                    raise
+                continue
+            years = set(x.strip() for x in years if x.strip())
+            if years:
+                return years
+        raise ValueError("no which_year options on any CT session list page")
