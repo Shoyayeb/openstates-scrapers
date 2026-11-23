@@ -170,6 +170,17 @@ class Tennessee(State):
             "end_date": "2026-05-08",
             "active": True,
         },
+        {
+            # ETL-28 2026-11-23, from upstream a6f39dd91 (TN: 2027 Prefiles,
+            # #6063): Tennessee posts 115th pre-filed bills before January.
+            "_scraped_name": "115th General Assembly",
+            "classification": "primary",
+            "identifier": "115",
+            "name": "115th Regular Session (2027-2028)",
+            "start_date": "2027-01-12",
+            "end_date": "2027-04-25",
+            "active": True,
+        },
     ]
     ignored_scraped_sessions = [
         "107th General Assembly",

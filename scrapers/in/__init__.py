@@ -174,7 +174,7 @@ class Indiana(State):
             "name": "2027 Regular Session",
             "start_date": "2027-01-06",
             "end_date": "2027-04-29",
-            "active": False,
+            "active": True,
         },
     ]
     ignored_scraped_sessions = [
