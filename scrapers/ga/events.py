@@ -56,7 +56,10 @@ class GAEventScraper(Scraper):
             where = row["location"]
             # Check if location already has the state abbr + ZIP code, this indicates that
             # the location is not at the state capitol
-            if not re.search("GA [0-9]{5}", where):
+            # A double space before the ZIP ("Atlanta, GA  30314") is common;
+            # missing it wrapped an off-site address in the Capitol's and the
+            # 208-character result ended the import (varchar 200, ETL-28).
+            if not re.search(r"GA\s+[0-9]{5}", where):
                 # Otherwise, the location is the room/place within the capitol where the event will take place
                 where = (
                     f"State Capitol, {where}, 206 Washington St SW, Atlanta, GA 30334"
@@ -65,7 +68,7 @@ class GAEventScraper(Scraper):
             event = Event(
                 name=title,
                 start_date=start,
-                location_name=where,
+                location_name=where[:200],
                 classification="committee-meeting",
                 status=status,
             )
