@@ -117,7 +117,12 @@ class AZEventScraper(Scraper):
             yield event
 
     def scrape_chamber(self, chamber):
-        session = self.jurisdiction.legislative_sessions[-1]["identifier"]
+        # The newest ACTIVE session: listing the next one inactive (58th, from
+        # upstream b82a73fb9) made [-1] a session with no meetings and no
+        # metadata, a KeyError that ended every AZ run (ETL-28).
+        sessions = self.jurisdiction.legislative_sessions
+        active = [s for s in sessions if s.get("active")]
+        session = (active or sessions)[-1]["identifier"]
         session_id = session_metadata.session_id_meta_data[session]
 
         chamber_abbr = self.chamber_codes[chamber]
