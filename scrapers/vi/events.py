@@ -108,3 +108,11 @@ class VIEventScraper(Scraper):
 
                 event_count += 1
                 yield event
+
+        # LawSignals ETL-28: legvi.org answered every month of 2026 with an
+        # empty calendar on 23 November 2026 (the same request returned events
+        # the next day). openstates ends the WHOLE run on a scraper that returns
+        # nothing, so a blank calendar cost that night's bill import too.
+        # EmptyScrape is only legal when nothing was yielded, hence the count.
+        if event_count == 0:
+            raise EmptyScrape("legvi.org calendar returned no events")
