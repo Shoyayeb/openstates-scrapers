@@ -218,6 +218,19 @@ class Maryland(State):
             "active": True,
         },
         {
+            # LawSignals ETL-28: the 3 to 5 August 2026 special session, ignored
+            # until now, so none of its bills reached us. From upstream ede63b0f1,
+            # except that the 2026 regular session stays active here: our
+            # session scope reads this flag, and its bills still move (vetoes).
+            "_scraped_name": "2026 Special Session",
+            "classification": "special",
+            "identifier": "2026s1",
+            "name": "2026, 1st Special Session",
+            "start_date": "2026-08-03",
+            "end_date": "2026-08-05",
+            "active": True,
+        },
+        {
             "_scraped_name": "2027 Regular Session",
             "classification": "primary",
             "identifier": "2027",
@@ -228,7 +241,6 @@ class Maryland(State):
         },
     ]
     ignored_scraped_sessions = [
-        "2026 Special Session",
         "1996 Regular Session",
         "1997 Regular Session",
         "1998 Regular Session",
