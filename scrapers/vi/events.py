@@ -8,6 +8,16 @@ import requests
 from openstates.exceptions import EmptyScrape
 from openstates.scrape import Scraper, Event
 
+# LawSignals ETL-28: from 24 November 2026 Cloudflare in front of legvi.org
+# answers python-requests' default User-Agent with a 403 block page on every
+# month; the same POST with a browser User-Agent returns the calendar.
+BROWSER_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+    ),
+}
+
 
 class VIEventScraper(Scraper):
     seen = []
@@ -48,15 +58,27 @@ class VIEventScraper(Scraper):
                 res = requests.post(
                     "https://legvi.org/wp-admin/admin-ajax.php",
                     data=data,
+                    headers=BROWSER_HEADERS,
                     timeout=30,
                 )
             except (requests.ConnectionError, requests.Timeout):
+                # LawSignals ETL-28: skip the month rather than raise here.
+                # EmptyScrape after an event was yielded is itself an error,
+                # so a mid-calendar outage ended the whole run. The count
+                # below still raises EmptyScrape when every month failed.
+                self.warning(f"legvi.org unreachable for {month}/{year}, skipping")
+                continue
+            # 24 November 2026: legvi.org answered one month with an empty body
+            # (JSONDecodeError) and the run ended there. Same treatment.
+            try:
+                page = json.loads(res.content)
+                page = lxml.html.fromstring(page["month"])
+            except (ValueError, KeyError, TypeError, lxml.etree.ParserError) as e:
                 self.warning(
-                    "legvi.org is unreachable; cannot scrape events calendar"
+                    f"legvi.org calendar for {month}/{year} unreadable "
+                    f"(http {res.status_code}, {len(res.content)} bytes): {e}"
                 )
-                raise EmptyScrape("legvi.org is unreachable")
-            page = json.loads(res.content)
-            page = lxml.html.fromstring(page["month"])
+                continue
 
             # json, embedded in html, served as a string JSON key...
             for script in page.xpath('//script[@type="application/ld+json"]'):
